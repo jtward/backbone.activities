@@ -3,6 +3,8 @@
   "use strict";
 
   var Backbone = window.Backbone;
+  var _ = window._;
+  var $ = window.$;
 
   var VERSION = '0.1.0';
 
@@ -46,7 +48,7 @@
           }, this));
 
       // initialize initial layout.
-      // if the router is responsive, setLayout should be called whenever the desired 
+      // if the router is responsive, setLayout should be called whenever the desired
       // layout changes.
       if(options.initialLayout) {
         this.setLayout(options.initialLayout);
@@ -167,7 +169,7 @@
 
     },
 
-    // updateRegion takes a region and either a view or an object with a template 
+    // updateRegion takes a region and either a view or an object with a template
     //  and a views object.
     // The views are inserted into the region, replacing any existing views.
     //
