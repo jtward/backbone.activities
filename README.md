@@ -15,7 +15,7 @@ In Backbone, each page for your smallest form factor will have its own route, an
 
 The role of an activity is generally to be responsible for handling all of the data involved in all of its views, and to render a page based on the route that was fired and the current layout by using the `updateRegions` method.
 
-### The activity aifecycle
+### The activity lifecycle
 ```
 #################################################
 # Activity                                      #
