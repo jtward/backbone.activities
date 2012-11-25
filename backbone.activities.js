@@ -6,7 +6,7 @@
   var _ = window._;
   var $ = window.$;
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.1.1';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -41,7 +41,7 @@
         this.defaultRoute.activityName + '-' + this.defaultRoute.methodName,
           _.bind(function() {
 
-            this.didRoute(this.defaultRoute.activity,
+            this.didRoute(this.activities[this.defaultRoute.activityName],
               this.defaultRoute.methodName,
               Array.prototype.slice.apply(arguments));
 
