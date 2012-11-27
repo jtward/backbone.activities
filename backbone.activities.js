@@ -1,12 +1,11 @@
-(function(window) {
-
+(function(root) {
   "use strict";
 
-  var Backbone = window.Backbone;
-  var _ = window._;
-  var $ = window.$;
+  var Backbone = root.Backbone;
+  var _ = root._ || root.underscore || root.lodash;
+  var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.1.1';
+  var VERSION = '0.1.2';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -28,9 +27,8 @@
           // use the activity name plus the method name for uniqueness
           this.route(route, name + '-' + methodName, _.bind(function() {
 
-            this.didRoute(activity,
-              methodName,
-              Array.prototype.slice.apply(arguments));
+            // delegate to didRoute to implement the activity lifecycle
+            this.didRoute(activity, methodName, Array.prototype.slice.apply(arguments));
 
           }, this));
         }, this);
@@ -39,18 +37,18 @@
       // set up the default route
       this.route('',
         this.defaultRoute.activityName + '-' + this.defaultRoute.methodName,
-          _.bind(function() {
+        _.bind(function() {
 
-            this.didRoute(this.activities[this.defaultRoute.activityName],
-              this.defaultRoute.methodName,
-              Array.prototype.slice.apply(arguments));
+          this.didRoute(this.activities[this.defaultRoute.activityName],
+            this.defaultRoute.methodName,
+            Array.prototype.slice.apply(arguments));
 
-          }, this));
+        }, this));
 
       // initialize initial layout.
       // if the router is responsive, setLayout should be called whenever the desired
       // layout changes.
-      if(options.initialLayout) {
+      if (options.initialLayout) {
         this.setLayout(options.initialLayout);
       }
 
@@ -58,21 +56,23 @@
       Backbone.Router.prototype['constructor'].call(this, options);
     },
 
+    // setLayout sets the app layout. This triggers the corresponding layout in the current activity's
+    // current route handler
     setLayout: function(name) {
+
       // update the layout class on the parent element
       if (this.$el) {
         this.$el.removeClass('layout-' + this.currentLayout).addClass('layout-' + name);
       }
 
       this.currentLayout = name;
-      
+
       // if the current activity's current method has a function for the new layout,
       // invoke it
-      if (this.currentActivity &&
-        this.currentActivity[this.currentMethod][this.currentLayout]) {
+      if (this.currentActivity && this.currentActivity[this.currentMethod][this.currentLayout]) {
 
         this.currentActivity[this.currentMethod][this.currentLayout].apply(
-          this.currentActivity, this.currentArgs);
+        this.currentActivity, this.currentArgs);
 
       }
     },
@@ -92,7 +92,7 @@
 
       }
 
-      if (this.currentActivity && didChangeActivity) {
+      if(this.currentActivity && didChangeActivity) {
         this.currentActivity.onStop();
       }
 
@@ -102,28 +102,28 @@
       this.currentArgs = args;
 
       // start the new route
-      if (!activity._initialized) {
+      if(!activity._initialized) {
         activity.regions = this.regions;
         activity.onCreate();
         activity._initialized = true;
       }
 
-      if (didChangeActivity) {
+      if(didChangeActivity) {
         activity.onStart();
       }
 
-      if (this.currentActivity[this.currentMethod].onStart) {
+      if(this.currentActivity[this.currentMethod].onStart) {
 
         this.currentActivity[this.currentMethod].onStart.apply(
-          this.currentActivity, this.currentArgs);
-      
+        this.currentActivity, this.currentArgs);
+
       }
 
       if(this.currentActivity[this.currentMethod][this.currentLayout]) {
-      
+
         this.currentActivity[this.currentMethod][this.currentLayout].apply(
-          this.currentActivity, this.currentArgs);
-      
+        this.currentActivity, this.currentArgs);
+
       }
     },
 
@@ -133,10 +133,10 @@
 
   // Activity constructor
   Backbone.Activity = function(options) {
-    // both _configure and initialize are stubs
-    this._configure(options || {});
-    this.initialize.apply(this, arguments);
-  };
+      // both _configure and initialize are stubs
+      this._configure(options || {});
+      this.initialize.apply(this, arguments);
+    };
 
   // mix events into the prototype
   _.extend(Backbone.Activity.prototype, Backbone.Events, {
@@ -152,7 +152,7 @@
 
     // Initialize is an empty function by default. Override it with your own
     // initialization logic.
-    initialize: function(){},
+    initialize: function() {},
 
     // The router uses this value to determine whether to call an activity's onCreate
     // callback
@@ -216,7 +216,7 @@
       }
 
       // set the template of the region and then insert the views into their places
-      else {
+      else if (_.isObject(views)) {
         region.template = views.template;
         region.setViews(views.views);
       }
@@ -237,4 +237,6 @@
   // use backbone's extend (referencing via View here, but they're all the same)
   Backbone.Activity.extend = Backbone.View.extend;
 
-})(this);
+  // The module returns Backbone.
+  return Backbone;
+}(this));
