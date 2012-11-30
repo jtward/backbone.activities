@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.2.0';
+  var VERSION = '0.2.1';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -102,7 +102,7 @@
       // old route is stopped, change the current route
 
       this.$el.removeClass('activity-' + this.currentActivityName)
-          .removeClass('activityroute-' + this.currentActivityName + '-' + this.currentHandlerName);
+          .removeClass('activityhandler-' + this.currentActivityName + '-' + this.currentHandlerName);
 
       this.currentActivityName = activityName;
       this.currentHandlerName = handlerName;
