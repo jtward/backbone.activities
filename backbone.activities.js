@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.1.2';
+  var VERSION = '0.2.0';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -21,14 +21,14 @@
       this.regions = options.regions;
 
       // create a route for each entry in each activity's routes object
-      _.each(this.activities, function(activity, name) {
-        _.each(activity.routes, function(methodName, route) {
+      _.each(this.activities, function(activity, activityName) {
+        _.each(activity.routes, function(handlerName, route) {
 
-          // use the activity name plus the method name for uniqueness
-          this.route(route, name + '-' + methodName, _.bind(function() {
+          // use the activity name plus the route handler name for uniqueness
+          this.route(route, activityName + '-' + handlerName, _.bind(function() {
 
             // delegate to didRoute to implement the activity lifecycle
-            this.didRoute(activity, methodName, Array.prototype.slice.apply(arguments));
+            this.didRoute(activityName, handlerName, Array.prototype.slice.apply(arguments));
 
           }, this));
         }, this);
@@ -36,11 +36,11 @@
 
       // set up the default route
       this.route('',
-        this.defaultRoute.activityName + '-' + this.defaultRoute.methodName,
+        this.defaultRoute.activityName + '-' + this.defaultRoute.handlerName,
         _.bind(function() {
 
-          this.didRoute(this.activities[this.defaultRoute.activityName],
-            this.defaultRoute.methodName,
+          this.didRoute(this.defaultRoute.activityName,
+            this.defaultRoute.handlerName,
             Array.prototype.slice.apply(arguments));
 
         }, this));
@@ -60,46 +60,57 @@
     // current route handler
     setLayout: function(name) {
 
+      var activity = this.activities[this.currentActivityName];
+
       // update the layout class on the parent element
       if (this.$el) {
-        this.$el.removeClass('layout-' + this.currentLayout).addClass('layout-' + name);
+        this.$el.removeClass('layout-' + this.currentLayout)
+          .addClass('layout-' + name);
       }
 
       this.currentLayout = name;
 
       // if the current activity's current method has a function for the new layout,
       // invoke it
-      if (this.currentActivity && this.currentActivity[this.currentMethod][this.currentLayout]) {
+      if (activity && activity[this.currentHandlerName][this.currentLayout]) {
 
-        this.currentActivity[this.currentMethod][this.currentLayout].apply(
-        this.currentActivity, this.currentArgs);
+        activity[this.currentHandlerName][this.currentLayout].apply(activity, this.currentArgs);
 
       }
     },
 
     // Handle the activity lifecycle
-    didRoute: function(activity, method, args) {
+    didRoute: function(activityName, handlerName, args) {
 
-      var didChangeActivity = this.currentActivity !== activity;
-      var didChangeMethod = this.currentMethod !== method;
+      var didChangeActivity = this.currentActivityName !== activityName;
+      var didChangeRoute = this.currentHandlerName !== handlerName;
+      var activity = this.activities[this.currentActivityName];
 
       // first, stop the old route
-      if (this.currentActivity &&
-        (didChangeActivity || didChangeMethod) &&
-        this.currentActivity[this.currentMethod].onStop) {
+      if (this.currentActivityName &&
+        (didChangeActivity || didChangeRoute) &&
+        activity[this.currentHandlerName].onStop) {
 
-        this.currentActivity[this.currentMethod].onStop.apply(this.currentActivity);
+        activity[this.currentHandlerName].onStop.apply(activity);
 
       }
 
-      if(this.currentActivity && didChangeActivity) {
-        this.currentActivity.onStop();
+      if(activity && didChangeActivity) {
+        activity.onStop();
       }
 
       // old route is stopped, change the current route
-      this.currentActivity = activity;
-      this.currentMethod = method;
+
+      this.$el.removeClass('activity-' + this.currentActivityName)
+          .removeClass('activityroute-' + this.currentActivityName + '-' + this.currentHandlerName);
+
+      this.currentActivityName = activityName;
+      this.currentHandlerName = handlerName;
       this.currentArgs = args;
+      activity = this.activities[activityName];
+
+      this.$el.addClass('activity-' + this.currentActivityName)
+          .addClass('activityhandler-' + this.currentActivityName + '-' + this.currentHandlerName);
 
       // start the new route
       if(!activity._initialized) {
@@ -112,17 +123,15 @@
         activity.onStart();
       }
 
-      if(this.currentActivity[this.currentMethod].onStart) {
+      if(activity[this.currentHandlerName].onStart) {
 
-        this.currentActivity[this.currentMethod].onStart.apply(
-        this.currentActivity, this.currentArgs);
+        activity[this.currentHandlerName].onStart.apply(activity, this.currentArgs);
 
       }
 
-      if(this.currentActivity[this.currentMethod][this.currentLayout]) {
+      if(activity[this.currentHandlerName][this.currentLayout]) {
 
-        this.currentActivity[this.currentMethod][this.currentLayout].apply(
-        this.currentActivity, this.currentArgs);
+        activity[this.currentHandlerName][this.currentLayout].apply(activity, this.currentArgs);
 
       }
     },
