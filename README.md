@@ -119,7 +119,7 @@ The `updateRegions` method takes an object of views to be inserted into regions.
 
 There are a few ways to set the views for a given region using `updateRegions` (or `updateRegion` when updating a single region). The first, and easiest way, is to pass a view, which is inserted directly into the region. The second is to pass an object with a template name and views object. In this case, the region gets the given template rendered into it, and then views are rendered into place in the template using the selector strings. The third is to pass an array of views, but because of the way that LayoutManager works, you should only do this if all of the views in the array use the same template, or the views could render out of order.
 
-## Activity routers and layouts
+### Activity routers and layouts
 Activity routers are an extension of `Backbone.Router` with some additional setup logic (to hook up routes to activities and activities to regions), and routing logic (implementing activity lifecycles).
 
 An activity router needs a few things at initialization time:
@@ -129,3 +129,6 @@ An activity router needs a few things at initialization time:
 - `defaultRoute`: an object which defines the activity name and route handler name that should be used for the empty route
 
 The activity router also has a very important method, `setLayout`, which should be called immediately after the router has been instantiated and also whenever the app's layout changes. `setLayout` takes a single string as its argument which is maps to the names of the layout methods of activities' route handlers. You could hook up to a `matchMedia` listener like `enquire.js` to call `setLayout` in order to trigger the layout to change when the app resizes.
+
+### Manual Routing
+If you need to programmatically trigger routes, you can use the Activity's `navigate` method. This delegates to `Backbone.history.navigate` if you pass a URL fragment as the first parameter. You can also trigger silent navigation by passing an activity name and handler name, and optionally an arguments object.

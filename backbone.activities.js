@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.2.1';
+  var VERSION = '0.3.0';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -22,15 +22,21 @@
 
       // create a route for each entry in each activity's routes object
       _.each(this.activities, function(activity, activityName) {
+
+        activity._router = this;
+
         _.each(activity.routes, function(handlerName, route) {
 
-          // use the activity name plus the route handler name for uniqueness
-          this.route(route, activityName + '-' + handlerName, _.bind(function() {
+          if (!_.isObject(handlerName) || !handlerName.silent) {
 
-            // delegate to didRoute to implement the activity lifecycle
-            this.didRoute(activityName, handlerName, Array.prototype.slice.apply(arguments));
+            // use the activity name plus the route handler name for uniqueness
+            this.route(route, activityName + '-' + handlerName, _.bind(function() {
 
-          }, this));
+              // delegate to didRoute to implement the activity lifecycle
+              this.didRoute(activityName, handlerName, Array.prototype.slice.apply(arguments));
+
+            }, this));
+          }
         }, this);
       }, this);
 
@@ -232,6 +238,24 @@
 
       // render the region and all of its views
       region.render();
+    },
+
+    // manually navigate to a new activity/handler
+    // for silent navigation, you can pass an activity name, handler name and args
+    // for silent or non-silent navigation, pass a fragment and options; this is just a proxy for
+    //  Backbone.history.navigate, so pass true to navigate non-silently
+    navigate: function(activityName, handlerName, args) {
+
+      // if we're navigating to a specific activity/handler, do so silently using
+      // didRoute to handle the lifecycles
+      if (typeof handlerName === 'string') {
+        this._router.didRoute(activityName, handlerName, args || {});
+      }
+
+      // standard router navigation using a fragment
+      else {
+        Backbone.history.navigate(activityName, handlerName);
+      }
     },
 
     // callback stubs
