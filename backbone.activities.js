@@ -27,16 +27,13 @@
 
         _.each(activity.routes, function(handlerName, route) {
 
-          if (!_.isObject(handlerName) || !handlerName.silent) {
+          // use the activity name plus the route handler name for uniqueness
+          this.route(route, activityName + '-' + handlerName, _.bind(function() {
 
-            // use the activity name plus the route handler name for uniqueness
-            this.route(route, activityName + '-' + handlerName, _.bind(function() {
+            // delegate to didRoute to implement the activity lifecycle
+            this.didRoute(activityName, handlerName, Array.prototype.slice.apply(arguments));
 
-              // delegate to didRoute to implement the activity lifecycle
-              this.didRoute(activityName, handlerName, Array.prototype.slice.apply(arguments));
-
-            }, this));
-          }
+          }, this));
         }, this);
       }, this);
 
