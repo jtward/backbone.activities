@@ -158,9 +158,13 @@
     // This object will be the same for all activities associated with the same router.
     regions: {},
 
-    // _configure is an empty function by default. Override it with your own
-    // configuration logic.
-    _configure: function() {},
+    // Performs the initial configuration of an Activity with a set of options.
+    // Keys with special meaning *(routes)* are attached directly to the activity.
+    _configure: function(options) {
+      if (options.routes) {
+        this.routes = options.routes;
+      }
+    },
 
     // Initialize is an empty function by default. Override it with your own
     // initialization logic.
@@ -213,6 +217,10 @@
 
       // reset the template for the region for the first two cases (given a view; given an array of views)
       region.template = undefined;
+      
+      // Clear any remaining HTML in the view
+      // This might have been left over from a previous template
+      region.$el.empty();
 
       // if we have a single view, insert it directly into the region
       if (views instanceof Backbone.View) {
