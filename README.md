@@ -126,9 +126,23 @@ An activity router needs a few things at initialization time:
 - `regions`: an object of region names to LayoutManager layouts
 - `el`: a DOM element on which to set a class corresponding to the current layout. This lets you hook CSS into layouts
 - `activities`: a object of activity names to activities
-- `defaultRoute`: an object which defines the activity name and route handler name that should be used for the empty route
+- `defaultRoute`: either a URL fragment or an object which defines the activity name and route handler name that should be used for the empty route
 
-The activity router also has a very important method, `setLayout`, which should be called immediately after the router has been instantiated and also whenever the app's layout changes. `setLayout` takes a single string as its argument which is maps to the names of the layout methods of activities' route handlers. You could hook up to a `matchMedia` listener like `enquire.js` to call `setLayout` in order to trigger the layout to change when the app resizes.
+The activity router also has a very important method, `setLayout`, which should be called immediately after the router has been instantiated and also whenever the app's layout changes. `setLayout` takes a single string as its argument which is maps to the names of the layout methods of activities' route handlers. You could hook up to a `matchMedia` listener like `enquire.js` to call `setLayout` in order to trigger the layout to change when the app resizes. If the `initialLayout` option is supplied, the router will automatically set the layout to the provided string when it is constructed.
 
 ### Manual Routing
 If you need to programmatically trigger routes, you can use the Activity's `navigate` method. This delegates to `Backbone.history.navigate` if you pass a URL fragment as the first parameter. You can also trigger silent navigation by passing an activity name and handler name, and optionally an arguments object. If you do not want a handler to be reachable via a URL then simply omit it from the routes for the activity.
+
+### Protected routes / authorization
+From version 0.4, Backbone Activities supports protecting handlers or entire activities behind authentication checks. 
+
+To protect a handler or activity, set the `isProtected` property on the handler or activity to `true`. To check the current state of authentication, the router's `authenticate` method is called. You must implement this method, and it should return a truthy value iff the user is authenticated and therefore able to access protected handlers and activities.
+
+When authentication fails, the router looks for the `authenticateRedirect` property on the handler, activity or router. This may be a URL fragment, an object containing an activity and handler name and an optional array of arguments, or a function which returns the fragment or object. This fragment or object is used to silently invoke a route where the user can provide authentication details.
+
+The Activity's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
+
+## Change Log
+### 0.4.0
+- added built-in support for protected handlers and activities and authentication
+- add support for URL fragments; they can now be used for the default route and for authentication redirects

@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.3.0';
+  var VERSION = '0.4.0';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -20,31 +20,59 @@
       // e.g. { 'main': new Backbone.Layout({ el: '#main' }), ... }
       this.regions = options.regions;
 
+      // routes is an array of objects which contain the route RegEx as well as the
+      // corresponding activity and handler
+      this.routes = [];
+
       // create a route for each entry in each activity's routes object
       _.each(this.activities, function(activity, activityName) {
 
+        // give the activity a reference to the router
         activity._router = this;
 
         _.each(activity.routes, function(handlerName, route) {
 
+          // add this route to the internal array
+          this.routes.push({
+            route: this._routeToRegExp(route),
+            activityName: activityName,
+            handlerName: handlerName
+          });
+
           // use the activity name plus the route handler name for uniqueness
           this.route(route, activityName + '-' + handlerName, _.bind(function() {
 
-            // delegate to didRoute to implement the activity lifecycle
-            this.didRoute(activityName, handlerName, Array.prototype.slice.apply(arguments));
+            this._handleRoute(activityName,
+              handlerName,
+              Array.prototype.slice.apply(arguments));
 
           }, this));
         }, this);
       }, this);
+
+      // the default route may be a URL fragment
+      if (_.isString(this.defaultRoute)) {
+        // currently clobbers this.defaultRoute
+        // the default route may contain arguments
+        this.defaultRoute = this._getFragmentRoute(this.defaultRoute);
+      }
+
+      // add the default route to the internal array
+      this.routes.push({
+        route: this._routeToRegExp(''),
+        activityName: this.defaultRoute.activityName,
+        handlerName: this.defaultRoute.handlerName,
+        args: this.defaultRoute.args
+      });
 
       // set up the default route
       this.route('',
         this.defaultRoute.activityName + '-' + this.defaultRoute.handlerName,
         _.bind(function() {
 
-          this.didRoute(this.defaultRoute.activityName,
+          this._handleRoute(this.defaultRoute.activityName,
             this.defaultRoute.handlerName,
-            Array.prototype.slice.apply(arguments));
+            this.defaultRoute.args);
 
         }, this));
 
@@ -59,8 +87,8 @@
       Backbone.Router.prototype['constructor'].call(this, options);
     },
 
-    // setLayout sets the app layout. This triggers the corresponding layout in the current activity's
-    // current route handler
+    // setLayout sets the app layout. This triggers the corresponding layout in the current
+    // activity's current route handler
     setLayout: function(name) {
 
       var activity = this.activities[this.currentActivityName];
@@ -76,11 +104,11 @@
       // if the current activity's current method has a function for the new layout,
       // invoke it
       if (activity && activity[this.currentHandlerName][this.currentLayout]) {
-
         activity[this.currentHandlerName][this.currentLayout].apply(activity, this.currentArgs);
-
       }
     },
+
+
 
     // Handle the activity lifecycle
     didRoute: function(activityName, handlerName, args) {
@@ -95,7 +123,6 @@
         activity[this.currentHandlerName].onStop) {
 
         activity[this.currentHandlerName].onStop.apply(activity);
-
       }
 
       if(activity && didChangeActivity) {
@@ -127,16 +154,100 @@
       }
 
       if(activity[this.currentHandlerName].onStart) {
-
         activity[this.currentHandlerName].onStart.apply(activity, this.currentArgs);
-
       }
 
       if(activity[this.currentHandlerName][this.currentLayout]) {
-
         activity[this.currentHandlerName][this.currentLayout].apply(activity, this.currentArgs);
-
       }
+    },
+
+    // When called once authenticated, calls didRoute using the current URL fragment
+    resolveAuthentication: function() {
+      var fragment = Backbone.history.fragment;
+      var routeObj = this._getFragmentRoute(fragment);
+      var redirect = this._authenticateRoute(routeObj.activityName, routeObj.handlerName, routeObj.args);
+
+      // if authentication passed then a redirect will not be returned
+      if (!redirect) {
+        // call didRoute to show the protected page
+        this.didRoute.call(this, routeObj.activityName, routeObj.handlerName, routeObj.args);
+      }
+    },
+
+    _handleRoute: function(activityName, handlerName, args) {
+      var redirect = this._authenticateRoute(activityName, handlerName, args);
+      
+      // allow the redirect to provided via a function call
+      if (_.isFunction(redirect)) {
+        redirect = redirect();
+      }
+
+      // if the redirect is a URL fragment, extract the activity info
+      if (_.isString(redirect)) {
+        redirect = this._getFragmentRoute(redirect);
+      }
+
+      // delegate to didRoute to implement the activity lifecycle
+      if (redirect) {
+        this.didRoute(redirect.activityName, redirect.handlerName, redirect.args);
+      }
+      else {
+        this.didRoute(activityName, handlerName, args);
+      }
+    },
+
+    _authenticateRoute: function(activityName, handlerName, args) {
+      var activity = this.activities[activityName];
+      var authenticatorContext;
+      var redirect;
+      var redirectContext;
+
+      // if the activity is protected and there is an authenticator, check the authentication.
+      // If the authentication fails then return the redirect
+      var handlerAuth = activity[handlerName].authenticate;
+      var activityAuth = activity.authenticate;
+      var routerAuth = this.authenticate;
+
+      // authenticator precedence: handler > activity > router
+      var authenticator = handlerAuth || activityAuth || routerAuth;
+
+      // use authentication if protected and there is an authenticator
+      if ((activity[handlerName].isProtected || activity.isProtected) && authenticator) {
+
+        // authenticator context for a handler or activity is the activity
+        authenticatorContext = (handlerAuth || activityAuth) ? activity : this;
+
+        // authentication fails if a falsy value is returned
+        if (!authenticator.call(authenticatorContext, activityName, handlerName, args)) {
+          
+          // the authenticate redirect may be defined in the handler, activity, or router
+          redirect = activity[handlerName].authenticateRedirect ||
+            activity.authenticateRedirect ||
+            this.authenticateRedirect;
+
+          if (_.isFunction(redirect)) {
+            // redirect context for a handler or activity is the activity
+            redirectContext = (redirect === this.authenticateRedirect) ? this : activity;
+            redirect = redirect.call(redirectContext, activityName, handlerName, args);
+          }
+
+          return redirect;
+        }
+      }
+      return false;
+    },
+
+    // return the data for a fragment
+    _getFragmentRoute: function(fragment) {
+      var result = _.clone(_.find(this.routes, function(routeObj) {
+        return routeObj.route.test(fragment);
+      }, this));
+      var args = this._extractParameters(result.route, fragment);
+      if (args) {
+        result.args = args;
+      }
+      return result;
     },
 
     VERSION: VERSION
@@ -215,7 +326,8 @@
       region._removeViews(true);
       region.__manager__.hasRendered = false;
 
-      // reset the template for the region for the first two cases (given a view; given an array of views)
+      // reset the template for the region for the first two cases
+      // (given a view; given an array of views)
       region.template = undefined;
       
       // Clear any remaining HTML in the view
@@ -261,6 +373,12 @@
       else {
         Backbone.history.navigate(activityName, handlerName);
       }
+    },
+
+    // When called once authenticated, this will redirect to the original route which was cached
+    // when authentication failed for a protected activity
+    resolveAuthentication: function() {
+      this._router.resolveAuthentication();
     },
 
     // callback stubs
