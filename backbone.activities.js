@@ -128,12 +128,11 @@
     _didRoute: function(activityName, handlerName, args) {
 
       var didChangeActivity = this._currentActivityName !== activityName;
-      var didChangeRoute = didChangeActivity || (this._currentHandlerName !== handlerName);
       var activity = this.activities[this._currentActivityName];
       var handler = activity && activity.handlers[this._currentHandlerName];
 
       // first, stop the old route
-      if (this._currentActivityName && didChangeRoute) {
+      if (handler) {
         handler.onStop();
       }
 
@@ -165,17 +164,15 @@
         activity.onStart();
       }
 
-      if (didChangeRoute) {
-        if (!handler._initialized) {
-          handler.onCreate();
-          handler._initialized = true;
-        }
+      if (!handler._initialized) {
+        handler.onCreate();
+        handler._initialized = true;
+      }
 
-        handler.onStart.apply(handler, this._currentArgs);
+      handler.onStart.apply(handler, this._currentArgs);
 
-        if (this.currentLayout) {
-          handler.layouts[this.currentLayout].apply(handler, this._currentArgs);
-        }
+      if (this.currentLayout) {
+        handler.layouts[this.currentLayout].apply(handler, this._currentArgs);
       }
     },
 
@@ -194,7 +191,7 @@
 
     _handleRoute: function(activityName, handlerName, args) {
       var redirect = this._authenticateRoute(activityName, handlerName, args);
-      
+
       // allow the redirect to provided via a function call
       if (_.isFunction(redirect)) {
         redirect = redirect();
@@ -237,7 +234,7 @@
 
         // authentication fails if a falsy value is returned
         if (!authenticator.call(authenticatorContext, activityName, handlerName, args)) {
-          
+
           var handlerRedirect = handler.authenticateRedirect;
           var activityRedirect = activity.authenticateRedirect;
           var routerRedirect = this.authenticateRedirect;
@@ -389,7 +386,7 @@
       // reset the template for the region for the first two cases
       // (given a view; given an array of views)
       region.template = undefined;
-      
+
       // Clear any remaining HTML in the region
       // This might have been left over from a previous template
       region.$el.empty();
