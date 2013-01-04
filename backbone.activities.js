@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.5.0';
+  var VERSION = '0.5.1';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -37,15 +37,21 @@
 
         // give the activity a reference to the router
         activity.router = this;
-
+        activity.handlers = activity.handlers || {};
         _.each(activity.routes, function(handlerName, route) {
+          var handler;
 
-          var handler = activity.handlers[handlerName];
-          if (handler) {
-            handler.router = this;
-            handler.regions = this.regions;
-            handler.activity = activity;
+          // the handler may be attached directly to the routes object
+          // if so, put it in handlers and use route as its name
+          if (handlerName instanceof Backbone.ActivityRouteHandler) {
+            activity.handlers[route] = handlerName;
+            handlerName = route;
           }
+
+          handler = activity.handlers[handlerName];
+          handler.router = this;
+          handler.regions = this.regions;
+          handler.activity = activity;
 
           // add this route to the internal array
           this._routes.push({
