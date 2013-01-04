@@ -177,7 +177,9 @@
 
       handler.onStart.apply(handler, this._currentArgs);
 
-      if (this.currentLayout) {
+      if (this.currentLayout &&
+        handler.layouts &&
+        typeof handler.layouts[this.currentLayout] === 'function') {
         handler.layouts[this.currentLayout].apply(handler, this._currentArgs);
       }
     },
