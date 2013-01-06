@@ -67,17 +67,29 @@ The role of an activity is generally to handle all of the data involved across i
 ```
 
 ### Hooking up routes to activities; route handlers
-An activity's `routes` property defines the routes that an activity is responsible and the keys of the route handler objects for those routes. For example, the following `routes` object designates responsibility for the `"!/list"` route to the activity's `list` route handler:
+An activity's `routes` object defines the routes for which an activity is responsible, and the handlers that implement the bahaviour for those routes. For example, the following `routes` object designates responsibility for the `"!/list"` route to a new instance of `MyListHandler`:
 
 ```
-{
-  "!/list": "list"
+routes: {
+  "!/list": new MyListHandler()
 }
 ```
 
-When the activity router handles the `"!/list"` route, it looks up the activity that claimed that route. The handler is looked up from the activity's `handlers` object; in this case, `handlers.list`.
+Alternatively, you can specify a string which is used to look up the handler in the activity's `handlers` object, so the following code has the same effect:
+
+```
+routes: {
+  "!/list": 'list'
+},
+handlers: {
+  "list": new MyListHandler()
+}
+```
+
+When the router is initialized, a reference to the handler is added to the activity's `handlers` object using the route as the key.
 
 A route handler may have `onStart` and `onStop` methods, as well as methods for the application's layouts. Here's an example of an activity with a `list` route handler:
+
 
 ```
 var MyListHandler = Backbone.ActivityRouteHandler.extend({
@@ -139,6 +151,9 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The Activity's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+### 0.5.1
+- Support for supplying handlers directly to an activity's 'routes' object was added. When the router is initialized, a reference to the handler is added to the activity's handlers object using the route as the key.
+
 ### 0.5.0
 - The ActivityRouteHandler class was added. Handlers may no longer be defined inline on an activity.
 - Activity.handlers was added to namespace handlers within activities. The handlers are keyed by name, which are referenced by the activity's routes
