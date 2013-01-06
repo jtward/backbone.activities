@@ -86,7 +86,7 @@ handlers: {
 }
 ```
 
-When the router is initialized, a reference to the handler is added to the activity's `handlers` object using the route as the key.
+If you use the shorthand of attaching a handler directly to the `routes` object, then when the router is initialized, a reference to the handler is added to the activity's `handlers` object using the route as the key.
 
 A route handler may have `onStart` and `onStop` methods, as well as methods for the application's layouts. Here's an example of an activity with a `list` route handler:
 
