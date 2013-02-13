@@ -148,7 +148,7 @@ To protect a handler or activity, set the `isProtected` property on the handler 
 
 When authentication fails, the router looks for the `authenticateRedirect` property on the handler, activity or router. This may be a URL fragment, an object containing an activity and handler name and an optional array of arguments, or a function which returns the fragment or object. This fragment or object is used to silently invoke a route where the user can provide authentication details.
 
-The Activity's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
+The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
 ### 0.5.2
