@@ -307,6 +307,9 @@
       if (options.authenticateRedirect) {
         this.authenticateRedirect = options.authenticateRedirect;
       }
+      if (options.isProtected !== null && options.isProtected !== undefined) {
+        this.isProtected = options.isProtected;
+      }
     },
 
     // Initialize is an empty function by default. Override it with your own
@@ -357,6 +360,9 @@
       }
       if (options.authenticateRedirect) {
         this.authenticateRedirect = options.authenticateRedirect;
+      }
+      if (options.isProtected !== null && options.isProtected !== undefined) {
+        this.isProtected = options.isProtected;
       }
     },
 
