@@ -28,6 +28,12 @@
       // It may be specified in the class or overridden when instantiated
       this._initialLayout = options.initialLayout || this.initialLayout;
 
+      // authenticate is the function that checks whether the user is authenticated
+      this.authenticate = options.authenticate || this.authenticate;
+
+      // authenticateRedirect is the route that is fired if authentication fails
+      this.authenticateRedirect = options.authenticateRedirect || this.authenticateRedirect;
+
       // routes is an array of objects which contain the route RegEx as well as the
       // corresponding activity and handler
       this._routes = [];
@@ -295,6 +301,12 @@
       if (options.handlers) {
         this.handlers = options.handlers;
       }
+      if (options.authenticate) {
+        this.authenticate = options.authenticate;
+      }
+      if (options.authenticateRedirect) {
+        this.authenticateRedirect = options.authenticateRedirect;
+      }
     },
 
     // Initialize is an empty function by default. Override it with your own
@@ -339,6 +351,12 @@
     _configure: function(options) {
       if (options.layouts) {
         this.layouts = options.layouts;
+      }
+      if (options.authenticate) {
+        this.authenticate = options.authenticate;
+      }
+      if (options.authenticateRedirect) {
+        this.authenticateRedirect = options.authenticateRedirect;
       }
     },
 
