@@ -151,8 +151,12 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The Activity's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+### 0.5.2
+- Support for supplying `athenticate` and `authenticateRedirect` via options to ActivityRouters, Activities and ActivityHandlers was added.
+- Support for supplying `isProtected` via options to Activities and ActivityHandlers was added.
+
 ### 0.5.1
-- Support for supplying handlers directly to an activity's 'routes' object was added. When the router is initialized, a reference to the handler is added to the activity's handlers object using the route as the key.
+- Support for supplying handlers directly to an activity's `routes` object was added. When the router is initialized, a reference to the handler is added to the activity's handlers object using the route as the key.
 
 ### 0.5.0
 - The ActivityRouteHandler class was added. Handlers may no longer be defined inline on an activity.

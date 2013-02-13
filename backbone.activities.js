@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.5.1';
+  var VERSION = '0.5.2';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
