@@ -152,7 +152,7 @@ The ActivityRouter's `resolveAuthentication` method re-checks authentication and
 
 ## Change Log
 ### 0.5.2
-- Support for supplying `athenticate` and `authenticateRedirect` via options to ActivityRouters, Activities and ActivityHandlers was added.
+- Support for supplying `authenticate` and `authenticateRedirect` via options to ActivityRouters, Activities and ActivityHandlers was added.
 - Support for supplying `isProtected` via options to Activities and ActivityHandlers was added.
 
 ### 0.5.1
