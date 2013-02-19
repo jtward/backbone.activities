@@ -5,7 +5,7 @@
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
 
-  var VERSION = '0.5.2';
+  var VERSION = '0.5.3';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -406,9 +406,20 @@
     //   })
     //
     updateRegion: function(region, views) {
+      var that = this;
 
       // retrieve the actual region by its name
-      region = this.regions[region];
+      // if updateRegion was called recursively, we already have the actual region
+      if (typeof region === "string") {
+        region = this.regions[region];
+      }
+
+      if (region._isRendering) {
+        // keep a copy of the views so that we can update with them once the current views finish rendering
+        region._nextViews = views;
+        // don't do anything until the previous render is complete
+        return;
+      }
 
       // beware: hacks; we need to remove the views that were present previously
       // also set hasRendered to false so that LM doesn't ditch the new views when render is called
@@ -441,6 +452,26 @@
         region.template = views.template;
         region.setViews(views.views);
       }
+      
+      // set the _isRendering flag to true so that if new views come in they know to wait
+      region._isRendering = true;
+
+      // listen for afterRender so that we can update with any new views that could be waiting
+      region.on('afterRender', function listener() {
+        // rendering finished
+        var nextViews = region._nextViews;
+
+        // clean up
+        region.off('afterRender', listener);
+        region._isRendering = false;
+
+        // check for next views
+        if (nextViews) {
+          // there are views waiting; update!
+          region._nextViews = undefined;
+          that.updateRegion(region, nextViews);
+        }
+      });
 
       // render the region and all of its views
       region.render();
