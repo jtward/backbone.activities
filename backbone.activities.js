@@ -4,8 +4,9 @@
   var Backbone = root.Backbone;
   var _ = root._ || root.underscore || root.lodash;
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
+  var when = Backbone.Layout.prototype.options.when;
 
-  var VERSION = '0.5.3';
+  var VERSION = '0.6.0';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -279,6 +280,112 @@
       return result;
     },
 
+    // updateRegions takes an object of regions by name
+    // For each region given, the corresponding views are inserted. See updateRegion
+    // below for details.
+    updateRegions: function(regions) {
+
+      var promises = [];
+      _.each(regions, function(views, regionName) {
+        promises.push(this.updateRegion(regionName, views));
+      }, this);
+
+      return when.apply(null, promises);
+
+    },
+
+    // updateRegion takes a region and either a view or an object with a template
+    //  and a views object.
+    // The views are inserted into the region, replacing any existing views.
+    //
+    // Example: passing a single view:
+    //   updateRegion('main', view);
+    //
+    // Example: passing an array of views (note that if the views' templates are not
+    //  cached and differ then LayoutManager does not guarantee that the views will be
+    //  inserted into the document in order):
+    //   updateRegion('main', [ myViewUsingTamplateFoo, myOtherViewUsingTemplateFoo ])
+    //
+    // Example: passing an object of views:
+    //   updateRegion('main', {
+    //     template: 'mytemplate',
+    //     views: {
+    //       '.myclass': myView
+    //     }
+    //   })
+    //
+    updateRegion: function(region, views) {
+      var that = this;
+
+      // retrieve the actual region by its name
+      // if updateRegion was called recursively, we already have the actual region
+      if (typeof region === "string") {
+        region = this.regions[region];
+      }
+
+      if (region._isRendering) {
+        // keep a copy of the views so that we can update with them once the current views finish rendering
+        region._nextViews = views;
+        // don't do anything until the previous render is complete
+        return;
+      }
+
+      // beware: hacks; we need to remove the views that were present previously
+      // also set hasRendered to false so that LM doesn't ditch the new views when render is called
+      region._removeViews(true);
+      region.__manager__.hasRendered = false;
+
+      // reset the template for the region for the first two cases
+      // (given a view; given an array of views)
+      region.template = undefined;
+
+      // Clear any remaining HTML in the region
+      // This might have been left over from a previous template
+      region.$el.empty();
+
+      // if we have a single view, insert it directly into the region
+      if (views instanceof Backbone.View) {
+        region.insertView('', views);
+      }
+
+      // if we have an array of views, insert them
+      // beware: if the templates for the views are different then LM may not render them in order!
+      else if (_.isArray(views)) {
+        region.setViews({
+          '': views
+        });
+      }
+
+      // set the template of the region and then insert the views into their places
+      else if (_.isObject(views)) {
+        region.template = views.template;
+        region.setViews(views.views);
+      }
+      
+      // set the _isRendering flag to true so that if new views come in they know to wait
+      region._isRendering = true;
+
+      // listen for afterRender so that we can update with any new views that could be waiting
+      region.on('afterRender', function listener() {
+        // rendering finished
+        var nextViews = region._nextViews;
+
+        // clean up
+        region.off('afterRender', listener);
+        region._isRendering = false;
+
+        // check for next views
+        if (nextViews) {
+          // there are views waiting; update!
+          region._nextViews = undefined;
+          that.updateRegion(region, nextViews);
+        }
+      });
+
+      // render the region and all of its views
+      return region.render();
+    },
+
     VERSION: VERSION
 
   });
@@ -374,107 +481,12 @@
     // callback
     _initialized: false,
 
-    // updateRegions takes an object of regions by name
-    // For each region given, the corresponding views are inserted. See updateRegion
-    // below for details.
     updateRegions: function(regions) {
-
-      _.each(regions, function(views, regionName) {
-        this.updateRegion(regionName, views);
-      }, this);
-
+      return this.router.updateRegions(regions);
     },
 
-    // updateRegion takes a region and either a view or an object with a template
-    //  and a views object.
-    // The views are inserted into the region, replacing any existing views.
-    //
-    // Example: passing a single view:
-    //   updateRegion('main', view);
-    //
-    // Example: passing an array of views (note that if the views' templates are not
-    //  cached and differ then LayoutManager does not guarantee that the views will be
-    //  inserted into the document in order):
-    //   updateRegion('main', [ myViewUsingTamplateFoo, myOtherViewUsingTemplateFoo ])
-    //
-    // Example: passing an object of views:
-    //   updateRegion('main', {
-    //     template: 'mytemplate',
-    //     views: {
-    //       '.myclass': myView
-    //     }
-    //   })
-    //
     updateRegion: function(region, views) {
-      var that = this;
-
-      // retrieve the actual region by its name
-      // if updateRegion was called recursively, we already have the actual region
-      if (typeof region === "string") {
-        region = this.regions[region];
-      }
-
-      if (region._isRendering) {
-        // keep a copy of the views so that we can update with them once the current views finish rendering
-        region._nextViews = views;
-        // don't do anything until the previous render is complete
-        return;
-      }
-
-      // beware: hacks; we need to remove the views that were present previously
-      // also set hasRendered to false so that LM doesn't ditch the new views when render is called
-      region._removeViews(true);
-      region.__manager__.hasRendered = false;
-
-      // reset the template for the region for the first two cases
-      // (given a view; given an array of views)
-      region.template = undefined;
-
-      // Clear any remaining HTML in the region
-      // This might have been left over from a previous template
-      region.$el.empty();
-
-      // if we have a single view, insert it directly into the region
-      if (views instanceof Backbone.View) {
-        region.insertView('', views);
-      }
-
-      // if we have an array of views, insert them
-      // beware: if the templates for the views are different then LM may not render them in order!
-      else if (_.isArray(views)) {
-        region.setViews({
-          '': views
-        });
-      }
-
-      // set the template of the region and then insert the views into their places
-      else if (_.isObject(views)) {
-        region.template = views.template;
-        region.setViews(views.views);
-      }
-      
-      // set the _isRendering flag to true so that if new views come in they know to wait
-      region._isRendering = true;
-
-      // listen for afterRender so that we can update with any new views that could be waiting
-      region.on('afterRender', function listener() {
-        // rendering finished
-        var nextViews = region._nextViews;
-
-        // clean up
-        region.off('afterRender', listener);
-        region._isRendering = false;
-
-        // check for next views
-        if (nextViews) {
-          // there are views waiting; update!
-          region._nextViews = undefined;
-          that.updateRegion(region, nextViews);
-        }
-      });
-
-      // render the region and all of its views
-      region.render();
+      return this.router.updateRegion(region, views);
     },
 
     // callback stubs

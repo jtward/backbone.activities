@@ -151,6 +151,10 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+### 0.6.0
+- Added `updateRegions` and `updateRegion` to the `ActivityRouter` prototype. The corresponding methods on `ActivityRouteHandler` now defer to the router.
+- `updateRegions` and `updateRegion` now return a promise which is resolved when the region(s) have been rendered.
+
 ### 0.5.3
 - Fixed a bug where calling `ActivityRouteHandler.updateRegion` for a second time for a region before the previous views had been rendered would cause both sets of views to be shown.
 
