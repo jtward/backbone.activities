@@ -6,7 +6,7 @@
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
   var when = Backbone.Layout.prototype.options.when;
 
-  var VERSION = '0.6.0';
+  var VERSION = '0.6.1';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -290,8 +290,7 @@
         promises.push(this.updateRegion(regionName, views));
       }, this);
 
-      return when.apply(null, promises);
-
+      return when(promises);
     },
 
     // updateRegion takes a region and either a view or an object with a template
