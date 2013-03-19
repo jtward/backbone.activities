@@ -151,6 +151,9 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+### 0.6.2
+- Add a more useful error message when a handler is not found.
+
 ### 0.6.1
 - Fixed a bug in updateRegions; it now returns the correct promise and does not throw an error on iOS 5.
 

@@ -56,25 +56,31 @@
           }
 
           handler = activity.handlers[handlerName];
-          handler.router = this;
-          handler.regions = this.regions;
-          handler.activity = activity;
+          if (handler) {
+            handler.router = this;
+            handler.regions = this.regions;
+            handler.activity = activity;
 
-          // add this route to the internal array
-          this._routes.push({
-            route: this._routeToRegExp(route),
-            activityName: activityName,
-            handlerName: handlerName
-          });
+            // add this route to the internal array
+            this._routes.push({
+              route: this._routeToRegExp(route),
+              activityName: activityName,
+              handlerName: handlerName
+            });
 
-          // use the activity name plus the route handler name for uniqueness
-          this.route(route, activityName + '-' + handlerName, _.bind(function() {
+            // use the activity name plus the route handler name for uniqueness
+            this.route(route, activityName + '-' + handlerName, _.bind(function() {
 
-            this._handleRoute(activityName,
-              handlerName,
-              Array.prototype.slice.apply(arguments));
+              this._handleRoute(activityName,
+                handlerName,
+                Array.prototype.slice.apply(arguments));
 
-          }, this));
+            }, this));
+          }
+          else {
+            throw new Error("No handler \"" + handlerName +
+              "\" found for activity \"" + activityName + "\"");
+          }
         }, this);
       }, this);
 
@@ -83,7 +89,6 @@
 
         // the default route may contain arguments
         this._defaultRoute = this._getFragmentRoute(this._defaultRoute);
-
         this._routes.push({
           route: this._routeToRegExp(''),
           activityName: this._defaultRoute.activityName,
@@ -195,12 +200,14 @@
     resolveAuthentication: function() {
       var fragment = Backbone.history.fragment;
       var routeObj = this._getFragmentRoute(fragment);
-      var redirect = this._authenticateRoute(routeObj.activityName, routeObj.handlerName, routeObj.args);
+      if(routeObj) {
+        var redirect = this._authenticateRoute(routeObj.activityName, routeObj.handlerName, routeObj.args);
 
-      // if authentication passed then a redirect will not be returned
-      if (!redirect) {
-        // call didRoute to show the protected page
-        this._didRoute.call(this, routeObj.activityName, routeObj.handlerName, routeObj.args);
+        // if authentication passed then a redirect will not be returned
+        if (!redirect) {
+          // call didRoute to show the protected page
+          this._didRoute.call(this, routeObj.activityName, routeObj.handlerName, routeObj.args);
+        }
       }
     },
 
