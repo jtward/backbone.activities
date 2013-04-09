@@ -6,7 +6,7 @@
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
   var when = Backbone.Layout.prototype.options.when;
 
-  var VERSION = '0.6.1';
+  var VERSION = '0.7.0';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -20,6 +20,9 @@
       // regions is an object of region names to Layouts.
       // e.g. { 'main': new Backbone.Layout({ el: '#main' }), ... }
       this.regions = options.regions;
+
+      // activityRoutes is an optional map from url fragments to activity::handler strings
+      this.activityRoutes = options.activityRoutes || this.activityRoutes;
 
       // defaultRoute is a url fragment. It may be specified in the class or overridden
       // when instantiated
@@ -39,72 +42,75 @@
       // corresponding activity and handler
       this._routes = [];
 
-      // create a route for each entry in each activity's routes object
-      _.each(this.activities, function(activity, activityName) {
+      if (this.activityRoutes) {
 
-        // give the activity a reference to the router
-        activity.router = this;
-        activity.handlers = activity.handlers || {};
-        _.each(activity.routes, function(handlerName, route) {
-          var handler;
-
-          // the handler may be attached directly to the routes object
-          // if so, put it in handlers and use route as its name
-          if (handlerName instanceof Backbone.ActivityRouteHandler) {
-            activity.handlers[route] = handlerName;
-            handlerName = route;
-          }
-
-          handler = activity.handlers[handlerName];
-          if (handler) {
-            handler.router = this;
-            handler.regions = this.regions;
-            handler.activity = activity;
-
-            // add this route to the internal array
-            this._routes.push({
-              route: this._routeToRegExp(route),
-              activityName: activityName,
-              handlerName: handlerName
-            });
-
-            // use the activity name plus the route handler name for uniqueness
-            this.route(route, activityName + '-' + handlerName, _.bind(function() {
-
-              this._handleRoute(activityName,
-                handlerName,
-                Array.prototype.slice.apply(arguments));
-
-            }, this));
-          }
-          else {
-            throw new Error("No handler \"" + handlerName +
-              "\" found for activity \"" + activityName + "\"");
-          }
+        _.each(this.activities, function(activity, activityName) {
+          // give the activity a reference to the router
+          activity.router = this;
         }, this);
-      }, this);
+
+        _.each(this.activityRoutes, function(handlerString, route) {
+          var handlerParts = handlerString.split('::');
+          var activityName;
+          var handlerName;
+          var activity;
+          var handler;
+          if (handlerParts.length !== 2) {
+            throw new Error("Invalid activity::handler string: " + handlerString);
+          }
+          activityName = handlerParts[0];
+          handlerName = handlerParts[1];
+          activity = this.activities[activityName];
+          if (!activity) {
+            throw new Error("Activity " + activityName + " not found");
+          }
+          if (!activity.handlers) {
+            throw new Error("No handlers found for activity " + activityName);
+          }
+          handler = activity.handlers[handlerName];
+          if (!handler) {
+            throw new Error("No handler " + handlerName + " found for activity " + activityName);
+          }
+          this._hookHandler(handler, activity);
+          this._addRoute(activityName, handlerName, route);
+        }, this);
+      }
+      else {
+        // create a route for each entry in each activity's routes object
+        _.each(this.activities, function(activity, activityName) {
+
+          // give the activity a reference to the router
+          activity.router = this;
+          activity.handlers = activity.handlers || {};
+          _.each(activity.routes, function(handlerName, route) {
+            var handler;
+
+            // the handler may be attached directly to the routes object
+            // if so, put it in handlers and use route as its name
+            if (handlerName instanceof Backbone.ActivityRouteHandler) {
+              activity.handlers[route] = handlerName;
+              handlerName = route;
+            }
+
+            handler = activity.handlers[handlerName];
+            if (handler) {
+              this._hookHandler(handler, activity);
+              this._addRoute(activityName, handlerName, route);
+            }
+            else {
+              throw new Error("No handler \"" + handlerName +
+                "\" found for activity \"" + activityName + "\"");
+            }
+          }, this);
+        }, this);
+      }
 
       // set up the default route
       if (_.isString(this._defaultRoute)) {
 
         // the default route may contain arguments
         this._defaultRoute = this._getFragmentRoute(this._defaultRoute);
-        this._routes.push({
-          route: this._routeToRegExp(''),
-          activityName: this._defaultRoute.activityName,
-          handlerName: this._defaultRoute.handlerName,
-          args: this._defaultRoute.args
-        });
-
-        this.route('',
-          this._defaultRoute.activityName + '-' + this._defaultRoute.handlerName,
-          _.bind(function() {
-
-            this._handleRoute(this._defaultRoute.activityName,
-              this._defaultRoute.handlerName,
-              this._defaultRoute.args);
-
-          }, this));
+        this._addRoute(this._defaultRoute.activityName, this._defaultRoute.handlerName, '', this._defaultRoute.args);
       }
 
       // initialize initial layout.
@@ -249,6 +255,10 @@
       // authenticator precedence: handler > activity > router
       var authenticator = handlerAuth || activityAuth || routerAuth;
 
+      var handlerRedirect;
+      var activityRedirect;
+      var routerRedirect;
+
       // use authentication if protected and there is an authenticator
       if (authenticator && (handler.isProtected || activity.isProtected)) {
 
@@ -257,9 +267,9 @@
         // authentication fails if a falsy value is returned
         if (!authenticator.call(authenticatorContext, activityName, handlerName, args)) {
 
-          var handlerRedirect = handler.authenticateRedirect;
-          var activityRedirect = activity.authenticateRedirect;
-          var routerRedirect = this.authenticateRedirect;
+          handlerRedirect = handler.authenticateRedirect;
+          activityRedirect = activity.authenticateRedirect;
+          routerRedirect = this.authenticateRedirect;
 
           redirect = handlerRedirect || activityRedirect || routerRedirect;
 
@@ -285,6 +295,33 @@
         result.args = args;
       }
       return result;
+    },
+
+    // hooks up a handler to its activity and to the router
+    _hookHandler: function(handler, activity) {
+      handler.router = this;
+      handler.regions = this.regions;
+      handler.activity = activity;
+    },
+
+    // hook up a route to an activity and handler
+    _addRoute: function(activityName, handlerName, route, args) {
+      // add this route to the internal array
+      this._routes.push({
+        route: this._routeToRegExp(route),
+        activityName: activityName,
+        handlerName: handlerName,
+        args: args
+      });
+
+      // use the activity name plus the route handler name for uniqueness
+      this.route(route, activityName + '-' + handlerName, _.bind(function() {
+
+        this._handleRoute(activityName,
+          handlerName,
+          args || Array.prototype.slice.apply(arguments));
+
+      }, this));
     },
 
     // updateRegions takes an object of regions by name
@@ -367,7 +404,7 @@
         region.template = views.template;
         region.setViews(views.views);
       }
-      
+
       // set the _isRendering flag to true so that if new views come in they know to wait
       region._isRendering = true;
 
@@ -406,7 +443,8 @@
   _.extend(Backbone.Activity.prototype, Backbone.Events, {
 
     // Performs the initial configuration of an Activity with a set of options.
-    // Keys with special meaning *(routes)* are attached directly to the activity.
+    // Keys with special meaning *(routes, handlers, authenticate, authenticateRedirect, isProtected)*
+    // are attached directly to the activity.
     _configure: function(options) {
       if (options.routes) {
         this.routes = options.routes;
@@ -463,7 +501,8 @@
     layouts: {},
 
     // Performs the initial configuration of an ActivityRouteHandler with a set of options.
-    // Keys with special meaning *(layouts)* are attached directly to the activity.
+    // Keys with special meaning *(layouts, authenticate, authenticateRedirect, isProtected)*
+    // are attached directly to the activity.
     _configure: function(options) {
       if (options.layouts) {
         this.layouts = options.layouts;

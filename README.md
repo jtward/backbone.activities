@@ -7,6 +7,8 @@ Three additional Backbone entities are provided: `Backbone.Activity`, `Backbone.
 
 Dependencies are [Backbone](https://github.com/documentcloud/backbone) and [Backbone.layoutmanager](https://github.com/tbranyen/backbone.layoutmanager).
 
+Latest version: 0.7.0
+
 
 ### Activities
 In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. An activity should encompass the behaviour and layouts for a single page on the largest form factor that you support. In the list/detail example, the list and detail pages would be handled by a single activity.
@@ -122,6 +124,8 @@ var myActivity = Backbone.Activity.extend({
 });
 ```
 
+If an `activityRoutes` property is defined on the router, then the activities' `routes` objects are overridden by the routes defined there. See `activityRoutes` in "Activity routers and layouts" for more info.
+
 ### Regions, and rendering using `updateRegions`
 The `updateRegions` method takes an object of views to be inserted into regions. These regions are LayoutManager layouts whose `el`s are typically present throughout the application. It's possible you'll only need a main region, but you might want one for a header, footer, navigation menu, etc. Each handler has access to the app's regions via the `regions` property, which is populated by the activity router so you don't have to worry about them in your handlers. I've not yet had reason to access `regions` directly from a handler.
 
@@ -135,8 +139,9 @@ An activity router needs a few things at initialization time:
 - `el`: a DOM element on which to set a class corresponding to the current layout. This lets you hook CSS into layouts
 - `activities`: a object of activity names to activities
 - `defaultRoute`: either a URL fragment or an object which defines the activity name and route handler name that should be used for the empty route
+- `activityRoutes`: an optional object of routes to `activity::handler` strings. If this is supplied, then routes defined in activities' `routes` object are overridden. The activity names are defined by the keys used in the router's `activities` object, and the handler names are defined by the keys used in the activity's `handlers` object. The activity and handler names are separated by a double colon (`::`).
 
-The activity router also has a very important method, `setLayout`, which should be called immediately after the router has been instantiated (unless an `initialLayout` is specified) and also whenever the app's layout changes. `setLayout` takes a single string as its argument which is mapped to the names of the layout methods of activities' route handlers. You could hook up to a `matchMedia` listener like `enquire.js` to call `setLayout` in order to trigger the layout to change when the app resizes. If the `initialLayout` option is supplied, the router will automatically set the layout to the provided string when it is constructed.
+The activity router also has a very important method, `setLayout`, which should be called immediately after the router has been instantiated (unless an `initialLayout` is specified) and also whenever the app's layout changes. `setLayout` takes a single string as its argument which is mapped to the names of the layout methods of activities' route handlers. You could hook up to a `matchMedia` listener to call `setLayout` in order to trigger the layout to change when the app resizes. If the `initialLayout` option is supplied, the router will automatically set the layout to the provided string when it is constructed.
 
 ### Manual Routing
 If you need to programmatically trigger routes, you should use the `Backbone.history.navigate` method with the `trigger` option set to `true`.
@@ -151,6 +156,9 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+### 0.7.0
+- Support for supplying activityRoutes to the router via activity::handler strings.
+
 ### 0.6.2
 - Add a more useful error message when a handler is not found.
 
