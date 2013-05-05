@@ -7,7 +7,7 @@ Three additional Backbone entities are provided: `Backbone.Activity`, `Backbone.
 
 Dependencies are [Backbone](https://github.com/documentcloud/backbone) and [Backbone.layoutmanager](https://github.com/tbranyen/backbone.layoutmanager).
 
-Latest version: 0.7.0
+Latest version: 0.7.1
 
 
 ### Activities
@@ -156,6 +156,9 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+### 0.7.1
+- Allow routers' el and regions to be provided via prototype and default el to document.body
+
 ### 0.7.0
 - Support for supplying activityRoutes to the router via activity::handler strings.
 
