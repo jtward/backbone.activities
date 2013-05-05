@@ -6,7 +6,7 @@
   var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
   var when = Backbone.Layout.prototype.options.when;
 
-  var VERSION = '0.7.0';
+  var VERSION = '0.7.1';
 
   Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -15,11 +15,11 @@
 
       // an ActivityRouter's el is the point at which the layout class is added.
       // this lets you hook CSS onto specific layouts
-      this._$el = $(options.el);
+      this._$el = $(options.el || this.el || document.body);
 
       // regions is an object of region names to Layouts.
       // e.g. { 'main': new Backbone.Layout({ el: '#main' }), ... }
-      this.regions = options.regions;
+      this.regions = options.regions || this.regions;
 
       // activityRoutes is an optional map from url fragments to activity::handler strings
       this.activityRoutes = options.activityRoutes || this.activityRoutes;
