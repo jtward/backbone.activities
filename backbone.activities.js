@@ -443,14 +443,20 @@
             }, this);
         },
 
-        processTaskQueue: function (args) {
-            return asyncEach(this._taskQueue, function (taskName, i, args) {
-                var task = this.tasks[taskName];
-                if (task) return task.apply(this, args);
-            }, this, args)
-            .always(function() {
-                this._taskQueue = [];
-            });
+        processTaskQueue: function () {
+            return asyncEach(this._taskQueue, this.runTask, this)
+                .always(function() {
+                    this._taskQueue = [];
+                });
+        },
+
+        runTasks: function (/* taskNames */) {
+            return asyncEach(arguments, this.runTask, this);
+        },
+
+        runTask: function (taskName) {
+            var task = this.tasks[taskName];
+            if (task) return task.apply(this, this.router._currentArgs);
         },
 
         VERSION: VERSION
