@@ -5,9 +5,6 @@
     var Backbone = root.Backbone;
     var _ = root._ || root.underscore || root.lodash;
     var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
-    var when = function (promises) {
-        return $.when.apply(null, promises);
-    };
     var asyncEach = function (array, cb, context, args) {
         var dfd = $.Deferred(),
             i = -1;
@@ -477,7 +474,7 @@
     // Activity constructor
     Backbone.ActivityRouteHandler = Backbone.Activity.extend({
         updateRegions: function () {
-            window.console.error("The updateRegions function has been removed from backbone.activities. Please see Backbone.transitionmanager for a replacement");
+            window.console.error("The updateRegions function has been removed from backbone.activities. Please use built in LayoutManager function instead.");
         }
     });
 
