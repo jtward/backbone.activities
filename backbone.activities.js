@@ -188,6 +188,9 @@
         _handleRoute: function(activityNames, activities, args) {
             var i, activity, redirect;
 
+            // Only attempt to route if Backbone history has started
+            if (!Backbone.History.started) return window.console.warn("Not routing: Backbone history not started.");
+
             // Check for redirect function in activity hierarchy, redirect if true
             for (i = 0; i < activities.length; i++) {
                 activity = activities[i];
@@ -348,8 +351,6 @@
 
         // Re-invokes the current activity hierarchy
         reload: function() {
-            // Only attempt to reload if Backbone history has started
-            if (!Backbone.History.started) return;
 
             var route = this._getFragmentRoute(Backbone.history.fragment);
             if(route) {
@@ -363,6 +364,9 @@
         setLayout: function(name) {
             var router = this;
 
+            // If 'name' is already the current layout, return
+            if (router.currentLayout === name) return $.Deferred().resolve();
+
             // update the layout class on the parent element
             if (router._$el) {
                 router._$el.removeClass('layout-' + router.currentLayout).addClass('layout-' + name);
@@ -372,7 +376,7 @@
             router.currentLayout = name;
 
             // Call activity.layouts[name]() on each activity, deepest last
-            asyncEach(router.currentActivities, function (activity) {
+            return asyncEach(router._currentActivities, function (activity) {
 
                 var processTaskQueue = function() {
                     return activity.processTaskQueue.apply(activity, router._currentArgs);
@@ -469,7 +473,7 @@
     // Activity constructor
     Backbone.ActivityRouteHandler = Backbone.Activity.extend({
         updateRegions: function () {
-            console.error("The updateRegions function has been removed from backbone.activities. Please see Backbone.transitionmanager for a replacement");
+            window.console.error("The updateRegions function has been removed from backbone.activities. Please see Backbone.transitionmanager for a replacement");
         }
     });
 
