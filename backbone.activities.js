@@ -52,7 +52,6 @@
 
             // Intially empty arrays which hold a list of the currently active activities
             this._currentActivities = [];
-            this._currentActivityNames = [];
 
             // routes is an array of objects which contain the route RegEx as well as the
             // corresponding activity and handler
@@ -67,7 +66,7 @@
 
                 _.each(this.activityRoutes, function(handlerString, route) {
                     var handlerParts = handlerString.split('::'),
-                        activities = [], activityNames = [],
+                        activities = [],
                         activity, activityName,
                         subactivities = this.activities;
 
@@ -76,15 +75,17 @@
                         activityName = handlerParts[i];
                         activity = subactivities && subactivities[ activityName ];
 
-                        // If activity is a non-instantiated class, instantiate it.
-                        if (activity && !(activity instanceof Backbone.Activity) && activity.prototype) activity = new activity();
-
-                        subactivities = activity && activity.handlers;
                         if (activity) {
+
+                            // If activity is a non-instantiated class, instantiate it.
+                            if (activity && !(activity instanceof Backbone.Activity) && activity.prototype) activity = new activity();
+
                             activity.router = this;
                             activity.parent = activities[activities.length - 1] || undefined;
-                            activityNames.push(activityName.toLowerCase());
+                            activity.name = activityName.toLowerCase();
                             activities.push(activity);
+
+                            subactivities = activity && activity.handlers;
                         }
                         else {
                             break;
@@ -97,10 +98,10 @@
                     }
                     // If some activities were found, but not all of the specfied ones, then warn but continue
                     else if (activities.length < handlerParts.length) {
-                        console.warn("Sub-activity '" + activityName + "' not found, resolving to " + activityNames.join("::"));
+                        console.warn("Sub-activity '" + activityName + "' not found, resolving to " + _.pluck(activities, "name").join("::"));
                     }
 
-                    this._addRoute(activityNames, activities, route);
+                    this._addRoute(activities, route);
                 }, this);
             }
 
@@ -109,7 +110,7 @@
 
                 // the default route may contain arguments
                 this._defaultRoute = this._getFragmentRoute(this._defaultRoute);
-                this._addRoute(this._defaultRoute.activityNames, '', this._defaultRoute.args);
+                this._addRoute('', this._defaultRoute.args);
             }
 
             // initialize initial layout.
@@ -124,21 +125,17 @@
         },
 
         // hook up a route to an activity hierarchy
-        _addRoute: function(activityNames, activities, route, args) {
+        _addRoute: function(activities, route, args) {
             // add this route to the internal array
             this._routes.push({
                 route: this._routeToRegExp(route),
-                activityNames: activityNames,
                 activities: activities,
                 args: args
             });
 
             // use the activity name plus the route handler name for uniqueness
-            this.route(route, activityNames.join("::"), _.bind(function() {
-                this._handleRoute(activityNames,
-                    activities,
-                    args || Array.prototype.slice.apply(arguments));
-
+            this.route(route, _.pluck(activities, "name").join("::"), _.bind(function() {
+                this._handleRoute(activities, args || Array.prototype.slice.apply(arguments));
             }, this));
         },
 
@@ -159,7 +156,6 @@
                 });
 
                 result = {
-                    activityNames: parts,
                     activities: activities
                 };
             }
@@ -185,7 +181,7 @@
         // handle a route
         // checks for a redirect first; if found, calls _redirectRoute
         // otherwise calls _handleLifecycle
-        _handleRoute: function(activityNames, activities, args) {
+        _handleRoute: function(activities, args) {
             var i, activity, redirect;
 
             // Only attempt to route if Backbone history has started
@@ -203,8 +199,8 @@
             this._internalFragment = Backbone.history.fragment;
 
             // Otherwise continue the activity lifecycle
-            window.console.log("Routing to " + activityNames.join("::"));
-            return this._handleLifecycle(activityNames, activities, args);
+            window.console.log("Routing to " + _.pluck(activities, "name").join("::"));
+            return this._handleLifecycle(activities, args);
         },
 
         _redirectRoute: function(redirect) {
@@ -215,147 +211,155 @@
             }
             else {
                 redirect = this._getFragmentRoute(redirect);
-                return this._handleRoute(redirect.activityNames, redirect.activities, redirect.args);
+                return this._handleRoute(redirect.activities, redirect.args);
             }
         },
 
         // Handle the activity lifecycle
-        _handleLifecycle: function(activityNames, activities, args) {
-            var router = this;
+        _handleLifecycle: function(activities, args) {
+            var router = this,
 
-            // Find the index of the first activity that is different to the already loaded activities
-            var index = this._currentActivityNames.length;
-            _.find(this._currentActivityNames, function (name, i) {
-                if (!activityNames[i] || name !== activityNames[i]) {
-                    index = i;
-                    return true;
+            // Activities to be stopped (set in getChangedActivities)
+            oldActivities,
+
+            // Activities to be started (set in getChangedActivities)
+            newActivities,
+
+            getChangedActivities = function () {
+                // Find the index of the first activity that is different to the already loaded activities
+                var index = router._currentActivities.length;
+                _.find(router._currentActivities, function (name, i) {
+                    if (!activities[i].name || name !== activities[i].name) {
+                        index = i;
+                        return true;
+                    }
+                });
+
+                // If all activities are the same, but arguments have changed, reinit the deepest activity
+                if (index === router._currentActivities.length && _.difference(args, router._currentArgs).length > 0) {
+                    index -= 1;
                 }
-            });
 
-            // If all activities are the same, but arguments have changed, reinit the deepest activity
-            if (index === this._currentActivityNames.length && _.difference(args, this._currentArgs).length > 0) {
-                index -= 1;
-            }
+                // Old actvities are activity in currentActivities past index
+                // Reverse order so that deepest is deinitialized first
+                oldActivities = router._currentActivities.slice(index).reverse();
 
-            // Old actvities are activity in currentActivities past index
-            // Reverse order so that deepest is deinitialized first
-            var oldActivityNames = this._currentActivityNames.slice(index).reverse();
-            var oldActivities = this._currentActivities.slice(index).reverse();
+                // new activities are activities in 'activities' past index
+                newActivities = activities.slice(index);
+            },
 
-            // new activities are activities in 'activities' past index
-            var newActivityNames = activityNames.slice(index);
-            var newActivities = activities.slice(index);
+            // Call stop methods and remove classes of old activities, deepest first
+            stopOldActivities = function () {
+                return asyncEach(oldActivities, router._stopActivity);
+            },
 
-            var stopOldActivities = function () {
-                // Call stop methods and remove classes of old activities, deepest first
-                return asyncEach(oldActivities, function (activity, index) {
-
-                    var processTaskQueue = function() {
-                        return activity.processTaskQueue.apply(activity, router._currentArgs);
-                    },
-
-                    stopActivity = function () {
-                        return activity.onStop.apply(activity, router._currentArgs);
-                    },
-
-                    removeClassFromDOM = function() {
-                        router._$el.removeClass("activity-" + oldActivityNames[index]);
-                    };
-
-                    return $.when(stopActivity)
-                        .then(processTaskQueue)
-                        .then(removeClassFromDOM);
-
-                }, router);
-            };
-
-            var saveActivityNames = function () {
-                router._currentActivityNames = activityNames;
+            // Store current activities and arguments    
+            saveActivities = function () {
                 router._currentActivities = activities;
                 router._currentArgs = args;
+            },
+
+            // Call start methods on new activities (deepest last)
+            startNewActivities = function () {
+                asyncEach(newActivities, router._startActivity);
             };
 
-            var startNewActivities = function () {
-                // Call start methods on new activities (deepest last)
-                asyncEach(newActivities, function (activity, index) {
-
-                    var processTaskQueue = function() {
-                        return activity.processTaskQueue.apply(activity, router._currentArgs);
-                    },
-
-                    addActivityClassToDOM = function () {
-                        // Add class
-                        router._$el.addClass("activity-" + name);
-                    },
-
-                    // Activities and handlers need not be associated with a fragment, and therefore may not
-                    // have been hooked up when we initialized. Make sure that they are hooked up!
-                    // TODO
-                    setupActivity = function () {
-                        /*if (!activity.router) {
-                            activity.router = this;
-                        }
-                        if (!handler.router) {
-                            this._hookHandler(handler, activity);
-                        }*/
-                    },
-
-                    // Call onCreate if this is the first time the activity has been called
-                    initializeActivity = function() {
-                        if (!activity._initialized) {
-                            activity._initialized = true;
-                            return activity.onCreate.apply(activity, router._currentArgs);
-                        }
-                    },
-
-                    // Call activity onStart method
-                    startActivity = function () {
-                        return activity.onStart.apply(activity, router._currentArgs);
-                    },
-
-                    // Call activity layout method with currentLayout
-                    setActivityLayout = function () {
-                        if (router.currentLayout &&
-                            activity.layouts &&
-                            typeof activity.layouts[router.currentLayout] === 'function') {
-                            activity.layouts[router.currentLayout].apply(activity, router._currentArgs);
-                        }
-                    };
-
-                    return $.when(addActivityClassToDOM)
-                        .then(setupActivity)
-
-                        .then(initializeActivity)
-                        .then(processTaskQueue)
-
-                        .then(startActivity)
-                        .then(processTaskQueue)
-
-                        .then(setActivityLayout)
-                        .then(processTaskQueue);
-
-                }, router);
-            };
-
-            return stopOldActivities()
-                .then(saveActivityNames)
+            return $.when( getChangedActivities() )
+                .then(stopOldActivities)
+                .then(saveActivities)
                 .then(startNewActivities);
 
+        },
+
+        _startActivity: function (activity) {
+            var router = activity.router,
+
+            processTaskQueue = function() {
+                return activity.processTaskQueue.apply(activity, router._currentArgs);
+            },
+
+            addActivityClassToDOM = function () {
+                // Add class
+                router._$el.addClass("activity-" + activity.name);
+            },
+
+            // Activities and handlers need not be associated with a fragment, and therefore may not
+            // have been hooked up when we initialized. Make sure that they are hooked up!
+            // TODO
+            setupActivity = function () {
+                /*if (!activity.router) {
+                    activity.router = this;
+                }
+                if (!handler.router) {
+                    this._hookHandler(handler, activity);
+                }*/
+            },
+
+            // Call onCreate if this is the first time the activity has been called
+            initializeActivity = function() {
+                if (!activity._initialized) {
+                    activity._initialized = true;
+                    return activity.onCreate.apply(activity, router._currentArgs);
+                }
+            },
+
+            // Call activity onStart method
+            startActivity = function () {
+                return activity.onStart.apply(activity, router._currentArgs);
+            },
+
+            // Call activity layout method with currentLayout
+            setActivityLayout = function () {
+                if (router.currentLayout &&
+                    activity.layouts &&
+                    typeof activity.layouts[router.currentLayout] === 'function') {
+                    activity.layouts[router.currentLayout].apply(activity, router._currentArgs);
+                }
+            };
+
+            return $.when(addActivityClassToDOM)
+                .then(setupActivity)
+
+                .then(initializeActivity)
+                .then(processTaskQueue)
+
+                .then(startActivity)
+                .then(processTaskQueue)
+
+                .then(setActivityLayout)
+                .then(processTaskQueue);
+        },
+
+        // Calls an Activity's onStop method and processes the task queue
+        _stopActivity: function (activity, index) {
+            var router = activity.router,
+
+            processTaskQueue = function() {
+                return activity.processTaskQueue.apply(activity, router._currentArgs);
+            },
+
+            stopActivity = function () {
+                return activity.onStop.apply(activity, router._currentArgs);
+            },
+
+            removeClassFromDOM = function() {
+                router._$el.removeClass("activity-" + activity.name);
+            };
+
+            return $.when(stopActivity)
+                .then(processTaskQueue)
+                .then(removeClassFromDOM);
         },
 
         // Invokes an activity hierarchy without changing the URL fragment
         silentRoute: function (fragment) {
             var route = this._getFragmentRoute(fragment);
-            return this._handleRoute(route.activityNames, route.activities, route.args);
+            return route && this._handleRoute(route.activities, route.args);
         },
 
         // Re-invokes the current activity hierarchy
         reload: function() {
-
-            var route = this._getFragmentRoute(Backbone.history.fragment);
-            if(route) {
-                return this._handleRoute(route.activityName, route.handlerName, route.args);
-            }
+            return this.silentRoute(Backbone.history.fragment);
         },
 
         // Acitivates an app 'layout' by triggering the corresponding layout function in each
