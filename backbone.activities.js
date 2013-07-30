@@ -436,6 +436,14 @@
         onStart: function() {},
         onStop: function() {},
 
+        start: function () {
+            return Backbone.ActivityRouter.prototype._startActivity(this);
+        },
+
+        stop: function () {
+            return Backbone.ActivityRouter.prototype._stopActivity(this);
+        },
+
         // layouts is an object of layout names to layout functions
         layouts: {},
 
