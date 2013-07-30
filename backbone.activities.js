@@ -37,7 +37,7 @@
             this._$el = $(options.el || this.el || document.body);
 
             // activityRoutes is an optional map from url fragments to activity::handler strings
-            this.activityRoutes = options.activityRoutes || this.activityRoutes;
+            this.routes = this.activityRoutes = options.activityRoutes || this.activityRoutes || this.routes;
 
             // defaultRoute is a url fragment. It may be specified in the class or overridden
             // when instantiated
@@ -62,6 +62,12 @@
                 }, this);
 
                 _.each(this.activityRoutes, function(handlerString, route) {
+
+                    // Handle vanilla Backbone routes
+                    if (this[handlerString] && typeof this[handlerString] === "function") {
+                        return this.route(route, handlerString);
+                    }
+
                     var handlerParts = handlerString.split('::'),
                         activities = [],
                         activity, activityName,
@@ -75,7 +81,7 @@
                         if (activity) {
 
                             // If activity is a non-instantiated class, instantiate it.
-                            if (activity && !(activity instanceof Backbone.Activity) && activity.prototype) activity = new activity();
+                            if (!(activity instanceof Backbone.Activity) && activity.prototype) activity = new activity();
 
                             activity.router = this;
                             activity.parent = activities[activities.length - 1] || undefined;
@@ -118,7 +124,7 @@
             }
 
             // manually call the superclass constructor
-            Backbone.Router.prototype.constructor.call(this, options);
+            this.initialize.apply(this, arguments);
         },
 
         // hook up a route to an activity hierarchy
