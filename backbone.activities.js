@@ -36,7 +36,8 @@
             // this lets you hook CSS onto specific layouts
             this._$el = $(options.el || this.el || document.body);
 
-            // activityRoutes is an optional map from url fragments to activity::handler strings
+            // routes is an optional map from url fragments to either functions on the router (like ordinary Backbone routers)
+            // or activity::subactivity strings
             this.routes = this.activityRoutes = options.activityRoutes || this.activityRoutes || this.routes;
 
             // defaultRoute is a url fragment. It may be specified in the class or overridden
@@ -68,13 +69,15 @@
                         return this.route(route, handlerString);
                     }
 
-                    var handlerParts = handlerString.split('::'),
+                    var i,
+                        handlerParts = handlerString.split('::'),
                         activities = [],
-                        activity, activityName,
+                        activity,
+                        activityName,
                         subactivities = this.activities;
 
                     activity = this.activities;
-                    for (var i = 0; i < handlerParts.length; i++) {
+                    for (i = 0; i < handlerParts.length; i++) {
                         activityName = handlerParts[i];
                         activity = subactivities && subactivities[ activityName ];
 
@@ -101,7 +104,7 @@
                     }
                     // If some activities were found, but not all of the specfied ones, then warn but continue
                     else if (activities.length < handlerParts.length) {
-                        console.warn("Sub-activity '" + activityName + "' not found, resolving to " + _.pluck(activities, "name").join("::"));
+                        window.console.warn("Sub-activity '" + activityName + "' not found, resolving to " + _.pluck(activities, "name").join("::"));
                     }
 
                     this._addRoute(activities, route);
