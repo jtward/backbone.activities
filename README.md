@@ -161,7 +161,7 @@ The ActivityRouter's `resolveAuthentication` method re-checks authentication and
 
 The following features have been added or improved:
 
-- Support for nesting `Activity`s (replaces `ActivityRouteHandler`)
+- Support for nesting `Activity` classes (replaces `ActivityRouteHandler`)
 - Async support for activity functions (e.g. onStart)
 - [Tasks](docs/tasks.md) (organise code within an `Activity`)
 - `silentRoute` function (programatically calls route)
@@ -173,6 +173,10 @@ The following features have been removed:
 - Protected routes (use redirects instead)
 - `updateRegions` (use whatever view system you like with Activities)
 - Defining routes on the `Activity` prototype (define them in the `ActivityRouter` instead)
+
+The following features have been deprecated and will be removed in future versions of activities:
+
+- The `activityRoutes` hash (has been renamed to `routes`)
 
 ### 0.7.1
 - Allow routers' el and regions to be provided via prototype and default el to document.body
