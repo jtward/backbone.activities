@@ -38,7 +38,7 @@
 
             // routes is an optional map from url fragments to either functions on the router (like ordinary Backbone routers)
             // or activity::subactivity strings
-            this.routes = this.activityRoutes = options.activityRoutes || this.activityRoutes || this.routes;
+            this.routes = this.activityRoutes = options.activityRoutes || options.routes || this.activityRoutes || this.routes;
 
             // defaultRoute is a url fragment. It may be specified in the class or overridden
             // when instantiated
@@ -54,13 +54,6 @@
             // routes is an array of objects which contain the route RegEx as well as the
             // corresponding activity and handler
             this._routes = [];
-
-            if (this.activityRoutes) {
-                _.each(this.activities, function(activity, activityName) {
-                    // give the activity a reference to the router
-                    activity.router = this;
-                }, this);
-            }
 
             // call Backbone.Router.bindRoutes to process defined routes
             this._bindRoutes();
