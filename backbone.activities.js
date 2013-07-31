@@ -468,10 +468,13 @@
         // the queueTasks function uses this to store queued tasks 
         _taskQueue: [],
 
+        // Adds specified tasks to the task queue
         queueTasks: function (/* taskNames */) {
             this._taskQueue.push.apply(this._taskQueue, arguments);
         },
 
+        // Adds the specified tasks to the task queue,
+        // but only if they are not already in it
         queueTasksOnce: function (/* taskNames */) {
             _.each(arguments, function (taskName) {
                 if (_.indexOf(this._taskQueue, taskName) === -1) {
@@ -480,6 +483,8 @@
             }, this);
         },
 
+        // Call each of the tasks in the task queue in order,
+        // and then clears the task queue.
         processTaskQueue: function () {
             return asyncEach(this._taskQueue, this.runTask, this)
                 .always(function() {
@@ -487,10 +492,12 @@
                 });
         },
 
+        // Runs the specified tasks in order
         runTasks: function (/* taskNames */) {
             return asyncEach(arguments, this.runTask, this);
         },
 
+        // Runs the task 'taskName'
         runTask: function (taskName) {
             var task = this.tasks[taskName];
             if (task) return task.apply(this, this.router._currentArgs);
