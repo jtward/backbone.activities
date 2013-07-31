@@ -30,7 +30,6 @@
 
         constructor: function(options) {
             options = options || {};
-            var that = this;
 
             // an ActivityRouter's el is the point at which the layout class is added.
             // this lets you hook CSS onto specific layouts
@@ -60,7 +59,6 @@
 
             // set up the default route
             if (_.isString(this._defaultRoute)) {
-
                 // the default route may contain arguments
                 this._defaultRoute = this._getFragmentRoute(this._defaultRoute);
                 this._addRoute('', this._defaultRoute.args);
@@ -73,7 +71,7 @@
                 this.setLayout(this._initialLayout);
             }
 
-            // manually call the superclass constructor
+            // Call router's initialize functions
             this.initialize.apply(this, arguments);
         },
 
