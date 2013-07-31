@@ -84,7 +84,7 @@
             // If callback is passed, then route is a custom route:
             // defer to Backbone.Router.route
             if (callback) {
-                nativeRoute.apply(this, arguments);
+                return nativeRoute.apply(this, arguments);
             }
 
             // If no callback, but 'handlerString' matches a function on the router
@@ -111,7 +111,7 @@
             // Finally we call Backbone.Router.route with a custom callback function
             // using the  complete handlerString as name for uniqueness
             var router = this;
-            nativeRoute.call(this, route, handlerString, function() {
+            return nativeRoute.call(this, route, handlerString, function() {
                 router._handleRoute(activities, args || Array.prototype.slice.apply(arguments));
             });
         },
