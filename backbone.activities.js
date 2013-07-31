@@ -107,9 +107,12 @@
             // Activity::SubActivity string into an array of activities
             var activities = this._processActivityRoute(handlerString);
 
+            // If route is not a RegExp, convert it to one
+            if (!_.isRegExp(route)) route = this._routeToRegExp(route);
+
             // The we add the route to the internal array
             this._routes.push({
-                route: this._routeToRegExp(route),
+                route: route
                 activities: activities,
                 args: args // args is used only for defaultRoute
             });
