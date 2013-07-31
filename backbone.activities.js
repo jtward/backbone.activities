@@ -112,7 +112,7 @@
 
             // The we add the route to the internal array
             this._routes.push({
-                route: route
+                route: route,
                 activities: activities,
                 args: args // args is used only for defaultRoute
             });
