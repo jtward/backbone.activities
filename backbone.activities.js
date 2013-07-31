@@ -56,60 +56,14 @@
             this._routes = [];
 
             if (this.activityRoutes) {
-
                 _.each(this.activities, function(activity, activityName) {
                     // give the activity a reference to the router
                     activity.router = this;
                 }, this);
-
-                _.each(this.activityRoutes, function(handlerString, route) {
-
-                    // Handle vanilla Backbone routes
-                    if (this[handlerString] && typeof this[handlerString] === "function") {
-                        return this.route(route, handlerString);
-                    }
-
-                    var i,
-                        handlerParts = handlerString.split('::'),
-                        activities = [],
-                        activity,
-                        activityName,
-                        subactivities = this.activities;
-
-                    activity = this.activities;
-                    for (i = 0; i < handlerParts.length; i++) {
-                        activityName = handlerParts[i];
-                        activity = subactivities && subactivities[ activityName ];
-
-                        if (activity) {
-
-                            // If activity is a non-instantiated class, instantiate it.
-                            if (!(activity instanceof Backbone.Activity) && activity.prototype) activity = new activity();
-
-                            activity.router = this;
-                            activity.parent = activities[activities.length - 1] || undefined;
-                            activity.name = activityName.toLowerCase();
-                            activities.push(activity);
-
-                            subactivities = activity && activity.handlers;
-                        }
-                        else {
-                            break;
-                        }
-                    }
-
-                    // If no activities were found for a given route, throw an error
-                    if (activities.length < 1) {
-                        throw new Error("Activity '" + activityName + "' not found (note: activity names are case sensitive)");
-                    }
-                    // If some activities were found, but not all of the specfied ones, then warn but continue
-                    else if (activities.length < handlerParts.length) {
-                        window.console.warn("Sub-activity '" + activityName + "' not found, resolving to " + _.pluck(activities, "name").join("::"));
-                    }
-
-                    this._addRoute(activities, route);
-                }, this);
             }
+
+            // call Backbone.Router.bindRoutes to process defined routes
+            this._bindRoutes();
 
             // set up the default route
             if (_.isString(this._defaultRoute)) {
@@ -130,19 +84,86 @@
             this.initialize.apply(this, arguments);
         },
 
-        // hook up a route to an activity hierarchy
-        _addRoute: function(activities, route, args) {
-            // add this route to the internal array
+        // Wraps Backbone.Router.Route to add support for Activity::SubActivity strings 
+        // and binding arguments to routes.
+        // Supports everything that Backbone.Router.Route supports
+        route: function (route, handlerString, callback, args) {
+            var nativeRoute = Backbone.Router.prototype.route;
+
+            // If callback is passed, then route is a custom route:
+            // defer to Backbone.Router.route
+            if (callback) {
+                nativeRoute.apply(this, arguments);
+            }
+
+            // If no callback, but 'handlerString' matches a function on the router
+            // then route is an ordinary Backbone route: call Backbone.Router.route
+            // with the handlerString as the name
+            if (this[handlerString] && typeof this[handlerString] === "function") {
+                return nativeRoute.call(this, route, handlerString);
+            }
+
+            // Else route is an ActivityRoute: first we process the
+            // Activity::SubActivity string into an array of activities
+            var activities = this._processActivityRoute(handlerString);
+
+            // The we add the route to the internal array
             this._routes.push({
                 route: this._routeToRegExp(route),
                 activities: activities,
-                args: args
+                args: args // args is used only for defaultRoute
             });
 
-            // use the activity name plus the route handler name for uniqueness
-            this.route(route, _.pluck(activities, "name").join("::"), _.bind(function() {
-                this._handleRoute(activities, args || Array.prototype.slice.apply(arguments));
-            }, this));
+            // Finally we call Backbone.Router.route with a custom callback function
+            // using the  complete handlerString as name for uniqueness
+            var router = this;
+            nativeRoute.call(this, route, handlerString, function() {
+                router._handleRoute(activities, args || Array.prototype.slice.apply(arguments));
+            });
+        },
+
+        // Processes an Activity::SubActivity string into an array of activities,
+        // and configures those activities as necessary
+        _processActivityRoute: function (handlerString) {
+            var i,
+                handlerParts = handlerString.split('::'),
+                activities = [],
+                activity,
+                activityName,
+                subactivities = this.activities;
+
+            activity = this.activities;
+            for (i = 0; i < handlerParts.length; i++) {
+                activityName = handlerParts[i];
+                activity = subactivities && subactivities[ activityName ];
+
+                if (activity) {
+
+                    // If activity is a non-instantiated class, instantiate it.
+                    if (!(activity instanceof Backbone.Activity)) activity = new activity();
+
+                    activity.router = this;
+                    activity.parent = activities[activities.length - 1] || undefined;
+                    activity.name = activityName.toLowerCase();
+                    activities.push(activity);
+
+                    subactivities = activity && activity.handlers;
+                }
+                else {
+                    break;
+                }
+            }
+
+            // If no activities were found for a given route, throw an error
+            if (activities.length < 1) {
+                throw new Error("Activity '" + activityName + "' not found (note: activity names are case sensitive)");
+            }
+            // If some activities were found, but not all of the specfied ones, then warn but continue
+            else if (activities.length < handlerParts.length) {
+                window.console.warn("Sub-activity '" + activityName + "' not found, resolving to " + _.pluck(activities, "name").join("::"));
+            }
+
+            return activities;
         },
 
         // Takes either a url fragment (e.g. #!/people/john)
