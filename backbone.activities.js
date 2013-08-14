@@ -1,10 +1,25 @@
 /*jshint newcap:false */
-(function(root) {
+(function(root, factory) {
     "use strict";
 
+    // AMD. Register as an anonymous module.  Wrap in function so we have access
+    // to root via `this`.
+    if (typeof define === "function" && define.amd) {
+        return define(["backbone", "underscore", "jquery"], function() {
+            return factory.apply(root, arguments);
+        });
+    }
+
+    // Browser globals.
     var Backbone = root.Backbone;
     var _ = root._ || root.underscore || root.lodash;
-    var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
+    var $ = (Backbone && Backbone.$) || root.$ || root.jQuery || root.Zepto || root.ender;
+    Backbone.Layout = factory.call(root, Backbone, _, $);
+
+})(typeof global === "object" ? global : this, function (Backbone, _, $) {
+    "use strict";
+
+
     var asyncEach = function (array, cb, context, args) {
         var dfd = $.Deferred(),
             i = -1;
@@ -518,5 +533,8 @@
     });
 
     // The module returns Backbone.
-    return Backbone;
-}(this));
+    return {
+        "Activity": Backbone.Activity,
+        "ActivityRouter": Backbone.ActivityRouter
+    };
+});
