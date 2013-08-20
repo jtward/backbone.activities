@@ -311,7 +311,9 @@
 
             // Call stop methods and remove classes of old activities, deepest first
             stopOldActivities = function () {
-                return asyncEach(oldActivities, router._stopActivity);
+                return asyncEach(oldActivities, function (activity) {
+                    activity.stop();
+                });
             },
 
             // Store current activities and arguments    
@@ -322,7 +324,9 @@
 
             // Call start methods on new activities (deepest last)
             startNewActivities = function () {
-                asyncEach(newActivities, router._startActivity);
+                asyncEach(newActivities, function (activity) {
+                    activity.start(args);
+                });
             };
 
             return $.when( getChangedActivities() )
@@ -330,89 +334,6 @@
                 .then(saveActivities)
                 .then(startNewActivities);
 
-        },
-
-        _startActivity: function (activity) {
-            var router = activity.router,
-
-            processTaskQueue = function() {
-                return activity.processTaskQueue.apply(activity, router._currentArgs);
-            },
-
-            addActivityClassToDOM = function () {
-                if (router._$el) {
-                    router._$el.addClass("activity-" + activity.name);
-                }
-            },
-
-            // Activities and handlers need not be associated with a fragment, and therefore may not
-            // have been hooked up when we initialized. Make sure that they are hooked up!
-            // TODO
-            setupActivity = function () {
-                /*if (!activity.router) {
-                    activity.router = this;
-                }
-                if (!handler.router) {
-                    this._hookHandler(handler, activity);
-                }*/
-            },
-
-            // Call onCreate if this is the first time the activity has been called
-            initializeActivity = function() {
-                if (!activity._initialized) {
-                    activity._initialized = true;
-                    return activity.onCreate.apply(activity, router._currentArgs);
-                }
-            },
-
-            // Call activity onStart method
-            startActivity = function () {
-                return activity.onStart.apply(activity, router._currentArgs);
-            },
-
-            // Call activity layout method with currentLayout
-            setActivityLayout = function () {
-                if (router.currentLayout &&
-                    activity.layouts &&
-                    typeof activity.layouts[router.currentLayout] === 'function') {
-                    activity.layouts[router.currentLayout].apply(activity, router._currentArgs);
-                }
-            };
-
-            return $.when( addActivityClassToDOM() )
-                .then(setupActivity)
-
-                .then(initializeActivity)
-                .then(processTaskQueue)
-
-                .then(startActivity)
-                .then(processTaskQueue)
-
-                .then(setActivityLayout)
-                .then(processTaskQueue);
-        },
-
-        // Calls an Activity's onStop method and processes the task queue
-        _stopActivity: function (activity, index) {
-            var router = activity.router,
-
-            processTaskQueue = function() {
-                return activity.processTaskQueue.apply(activity, router._currentArgs);
-            },
-
-            stopActivity = function () {
-                return activity.onStop.apply(activity, router._currentArgs);
-            },
-
-            removeClassFromDOM = function() {
-                if (router._$el) {
-                    router._$el.removeClass("activity-" + activity.name);
-                }
-            };
-
-            return $.when( stopActivity() )
-                .then(processTaskQueue)
-                .then(removeClassFromDOM);
         },
 
         // Invokes an activity hierarchy without changing the URL fragment
@@ -494,12 +415,94 @@
         onStart: function() {},
         onStop: function() {},
 
-        start: function () {
-            return Backbone.ActivityRouter.prototype._startActivity(this);
+        start: function (args) {
+            var activity = this,
+                router = activity.router,
+
+            processTaskQueue = function() {
+                return activity.processTaskQueue.apply(activity, router._currentArgs);
+            },
+
+            addActivityClassToDOM = function () {
+                if (router._$el) {
+                    router._$el.addClass("activity-" + activity.name);
+                }
+            },
+
+            // Activities and handlers need not be associated with a fragment, and therefore may not
+            // have been hooked up when we initialized. Make sure that they are hooked up!
+            // TODO
+            setupActivity = function () {
+                /*if (!activity.router) {
+                    activity.router = this;
+                }
+                if (!handler.router) {
+                    this._hookHandler(handler, activity);
+                }*/
+            },
+
+            saveArgs = function () {
+                this._currentArgs = args;
+            },
+
+            // Call onCreate if this is the first time the activity has been called
+            initializeActivity = function() {
+                if (!activity._initialized) {
+                    activity._initialized = true;
+                    return activity.onCreate.apply(activity, activity._currentArgs);
+                }
+            },
+
+            // Call activity onStart method
+            startActivity = function () {
+                return activity.onStart.apply(activity, activity._currentArgs);
+            },
+
+            // Call activity layout method with currentLayout
+            setActivityLayout = function () {
+                if (router.currentLayout &&
+                    activity.layouts &&
+                    typeof activity.layouts[router.currentLayout] === 'function') {
+                    activity.layouts[router.currentLayout].apply(activity, activity._currentArgs);
+                }
+            };
+
+            return $.when( addActivityClassToDOM() )
+                .then(saveArgs)
+                .then(setupActivity)
+
+                .then(initializeActivity)
+                .then(processTaskQueue)
+
+                .then(startActivity)
+                .then(processTaskQueue)
+
+                .then(setActivityLayout)
+                .then(processTaskQueue);
         },
 
+        // Calls an Activity's onStop method and processes the task queue
         stop: function () {
-            return Backbone.ActivityRouter.prototype._stopActivity(this);
+            var activity = this,
+                router = activity.router,
+
+            processTaskQueue = function() {
+                return activity.processTaskQueue.apply(activity, router._currentArgs);
+            },
+
+            stopActivity = function () {
+                return activity.onStop.apply(activity, router._currentArgs);
+            },
+
+            removeClassFromDOM = function() {
+                if (router._$el) {
+                    router._$el.removeClass("activity-" + activity.name);
+                }
+            };
+
+            return $.when( stopActivity() )
+                .then(processTaskQueue)
+                .then(removeClassFromDOM);
         },
 
         // layouts is an object of layout names to layout functions
