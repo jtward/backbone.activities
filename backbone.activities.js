@@ -381,6 +381,9 @@
 
         // Re-invokes the current activity hierarchy
         reload: function() {
+            // Only attempt to reload if Backbone history has started
+            if (!Backbone.History.started) return;
+
             return this.silentRoute(Backbone.history.fragment);
         },
 
