@@ -180,7 +180,7 @@
 
                 // Push activity to list, and get subactivities for further processing
                 activities.push(activity);
-                subactivities = activity && activity.handlers;
+                subactivities = activity && (activity.subactivities || activity.handlers);
             }
 
             // If no activities were found for a given route, throw an error
@@ -409,10 +409,11 @@
     _.extend(Backbone.Activity.prototype, Backbone.Events, {
 
         // Performs the initial configuration of an Activity with a set of options.
-        // Keys with special meaning *(routes, handlers, redirect, layouts)*
+        // Keys with special meaning *(routes, subactivities, redirect, layouts)*
         // are attached directly to the activity.
         _configure: function(options) {
-            _.extend(this, _.pick(options, "routes", "handlers", "redirect", "layouts"));
+            _.extend(this, _.pick(options, "routes", "subactivities", "redirect", "layouts"));
+            if (!this.subactivities && options.handlers) this.subactivities = options.handlers;
         },
 
         // Initialize is an empty function by default. Override it with your own
@@ -440,18 +441,6 @@
                 if (router._$el) {
                     router._$el.addClass("activity-" + activity.name);
                 }
-            },
-
-            // Activities and handlers need not be associated with a fragment, and therefore may not
-            // have been hooked up when we initialized. Make sure that they are hooked up!
-            // TODO
-            setupActivity = function () {
-                /*if (!activity.router) {
-                    activity.router = this;
-                }
-                if (!handler.router) {
-                    this._hookHandler(handler, activity);
-                }*/
             },
 
             saveArgs = function () {
@@ -482,7 +471,6 @@
 
             return $.when( addActivityClassToDOM() )
                 .then(saveArgs)
-                .then(setupActivity)
 
                 .then(initializeActivity)
                 .then(processTaskQueue)
