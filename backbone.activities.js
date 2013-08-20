@@ -609,6 +609,7 @@
     // The module returns Activity and ActivityRouter
     return {
         "Activity": Backbone.Activity,
+        "ActivityRouteHandler": Backbone.ActivityRouteHandler,
         "ActivityRouter": Backbone.ActivityRouter
     };
 });
