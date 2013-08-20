@@ -142,6 +142,7 @@
             // using the  complete handlerString as name for uniqueness
             var router = this;
             return nativeRoute.call(this, route, handlerString, function() {
+                router._internalFragment = Backbone.history.fragment;
                 router._handleRoute(activities, args || Array.prototype.slice.apply(arguments));
             });
         },
@@ -200,7 +201,7 @@
             if (!(activity instanceof Backbone.Activity)) activity = new activity();
 
             activity.router = this;
-            activity.parent = parent || undefined;
+            activity.parent = activity.activity = parent || undefined;
             activity.name = activityName.toLowerCase();
             activity._isSetup = true;
             
@@ -213,11 +214,30 @@
         // or an activities route string (e.g. people::detail)
         // and returns the activity hierarchy associated with that route.
         _getFragmentRoute: function(fragment) {
-            var parts, result, i, parent,
+            var handlerParts, result, i, parent, activityName,
                 activities = [];
 
-            // Case for activities route string
-            if ((handlerParts = fragment.split('::')).length > 0) {
+            // Trim # characters from start of fragment
+            fragment = fragment.replace(/^#+/, '');
+
+            // Check if a route with given fragment exists
+            for (i = this._routes.length - 1; i >= 0; i -= 1) {
+                if (this._routes[i].route.test(fragment)) {
+                    result = this._routes[i];
+                    break;
+                }
+            }
+
+            // If it does then fetch arguments, and return it
+            if (result) {
+                var args = this._extractParameters(result.route, fragment);
+                if (args) {
+                    result.args = args;
+                }
+            }
+            // Else, treat fragment as an Activity::SubActivity string
+            else {
+                handlerParts = fragment.split('::');
 
                 if (!this._activities[handlerParts.join("-")]){
                     activities = this._processActivityRoute(fragment);
@@ -226,36 +246,21 @@
                     _.each(handlerParts, function (localName, i) {
                         activityName = handlerParts.slice(0, i + 1).join("-");
                         activities.push( this._activities[activityName] );
-                    });
+                    }, this);
                 }
 
                 result = {
                     activities: activities
                 };
             }
-            // Case for URL fragment
-            else {
-                fragment = fragment.replace(/^#+/, '');
-
-                for (i = this._routes.length - 1; i >= 0; i -= 1) {
-                    if (this._routes[i].route.test(fragment)) {
-                        result = this._routes[i];
-                        break;
-                    }
-                }
-
-                var args = this._extractParameters(result.route, fragment);
-                if (args) {
-                    result.args = args;
-                }
-            }
+            
             return result;
         },
 
         // handle a route
         // checks for a redirect first; if found, calls _redirectRoute
         // otherwise calls _handleLifecycle
-        _handleRoute: function(activities, args) {
+        _handleRoute: function(activities, args, alreadyIntercepted) {
             var i, activity, redirect;
 
             // Only attempt to route if Backbone history has started
@@ -268,9 +273,10 @@
                 if (redirect) return this._redirectRoute(redirect);
             }
 
-            // Update stored fragments if there is no redirect
-            this._previousFragment = this._internalFragment;
-            this._internalFragment = Backbone.history.fragment;
+            // If a navInterceptor exists, and has not already been called, call it
+            if (this.navInterceptor && !alreadyIntercepted) {
+                return this._interceptRoute(activities, args);
+            }
 
             // Otherwise continue the activity lifecycle
             root.console.log("Routing to " + _.pluck(activities, "name").join("::"));
@@ -278,15 +284,32 @@
         },
 
         _redirectRoute: function(redirect) {
-            var parts;
             if (redirect.trigger) {
                 // if trigger is true we know that the fragment is not an Activity::handler string
                 this.navigate(redirect.fragment, redirect);
             }
             else {
+                this._internalFragment = redirect;
                 redirect = this._getFragmentRoute(redirect);
                 return this._handleRoute(redirect.activities, redirect.args);
             }
+        },
+
+        _interceptRoute: function(activities, args) {
+            var options, deepestActivity;
+
+            // Get a reference to the deepest activity
+            deepestActivity = activities[ activities.length - 1 ];
+
+            // Get interception options off the deepest actvity
+            options = deepestActivity.navigatorOptions || {};
+            if (_.isFunction(options)) options = options.apply(deepestActivity, args);
+
+            // Call the navInterceptor with the fragment and options
+            this.navInterceptor.navigate({
+                'fragment': this._internalFragment,
+                'options': options
+            }, {});
         },
 
         // Handle the activity lifecycle
@@ -310,7 +333,7 @@
                 });
 
                 // If all activities are the same, but arguments have changed, reinit the deepest activity
-                if (index > 0 && index === router._currentActivities.length && _.difference(args, router._currentArgs).length > 0) {
+                if (index > 0 && index === router._currentActivities.length && args !== router._currentArgs && args && _.intersetion(args, router._currentArgs).length === args.length) {
                     index -= 1;
                 }
 
@@ -351,13 +374,32 @@
 
         // Invokes an activity hierarchy without changing the URL fragment
         silentRoute: function (fragment) {
+            this._internalFragment = fragment;
             var route = this._getFragmentRoute(fragment);
             return route && this._handleRoute(route.activities, route.args);
         },
 
         // Re-invokes the current activity hierarchy
         reload: function() {
-            return this.silentRoute(this._internalFragment);
+            return this.silentRoute(Backbone.history.fragment);
+        },
+
+        interceptNavigation: function(interceptor) {
+            var router = this;
+            this.navInterceptor = interceptor;
+
+            // TODO: allow use of Activity::handler strings
+            interceptor.on('navigate', function(fragment) {
+                // navigation instigated by native side
+                router.navigate(fragment, true);
+            });
+
+            interceptor.on('navigated', function(fragment) {
+                // navigation instigated by web side acknowledged by native side
+                var fragmentObj = router._getFragmentRoute(fragment);
+                router._handleRoute(fragmentObj.activities, fragmentObj.args, true);
+            });
+
         },
 
         // Acitivates an app 'layout' by triggering the corresponding layout function in each
@@ -444,7 +486,7 @@
             },
 
             saveArgs = function () {
-                this._currentArgs = args;
+                activity._currentArgs = args;
             },
 
             // Call onCreate if this is the first time the activity has been called
