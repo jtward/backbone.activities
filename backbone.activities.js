@@ -286,7 +286,7 @@
                       r = entity.redirect[j];
                       redirect = r && r.apply(entity, args);
                       if (redirect) break;
-            }
+                    }
                 }
             }
 
