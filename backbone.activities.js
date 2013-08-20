@@ -261,17 +261,37 @@
         // checks for a redirect first; if found, calls _redirectRoute
         // otherwise calls _handleLifecycle
         _handleRoute: function(activities, args, alreadyIntercepted) {
-            var i, activity, redirect;
+            var i, j, entity, r, activity, redirect;
 
             // Only attempt to route if Backbone history has started
             if (!Backbone.History.started) return root.console.warn("Not routing: Backbone history not started.");
 
-            // Check for redirect function in activity hierarchy, redirect if true
-            for (i = 0; i < activities.length; i++) {
-                activity = activities[i];
-                redirect = activity.redirect && activity.redirect.apply(activity, args);
-                if (redirect) return this._redirectRoute(redirect);
+            // Router + activities
+            var redirectEntities = [this].concat(activities);
+
+            // Search router + activities in hierachy for 'redirect' property
+            for (i = 0; i < redirectEntities.length; i++) {
+              entity = redirectEntities[i];
+
+                // If redirect property is a function, call it and return its return value
+                if (typeof entity.redirect === "function") {
+                    redirect = entity.redirect.apply(entity, args);
+                    if (redirect) break;
+                }
+
+                // Else if it's an array then iterate over each item
+                else if (_.isArray(entity.redirect)) {
+                    console.log("array");
+                    for (j = 0; j < entity.redirect.length; j++) {
+                      r = entity.redirect[j];
+                      redirect = r && r.apply(entity, args);
+                      if (redirect) break;
             }
+                }
+            }
+
+            // If a redirect was found, then redirect
+            if (redirect && redirect.toLowerCase().replace("::", "-") !== _.last(activities).name) return this._redirectRoute(redirect);
 
             // If a navInterceptor exists, and has not already been called, call it
             if (this.navInterceptor && !alreadyIntercepted) {
