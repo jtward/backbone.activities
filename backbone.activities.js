@@ -151,6 +151,7 @@
         _processActivityRoute: function (handlerString) {
             var i,
                 handlerParts = handlerString.split('::'),
+                parent,
                 activities = [],
                 activity,
                 activityName, localName,
@@ -169,14 +170,8 @@
                     activity = (subactivities && subactivities[ localName ]);
 
                     if (activity) {
-                        // If activity is a non-instantiated class, instantiate it.
-                        if (!(activity instanceof Backbone.Activity)) activity = new activity();
-
-                        activity.router = this;
-                        activity.parent = activities[activities.length - 1] || undefined;
-                        activity.name = activityName.toLowerCase();
-                        
-                        this._activities[activityName] = activity;
+                        parent = (activities.length > 0) ? activities[activities.length - 1] : undefined;
+                        activity = this._setupActivity(activity, activityName, parent);
                     }
                 }
 
@@ -200,21 +195,39 @@
             return activities;
         },
 
+        _setupActivity: function(activity, activityName, parent) {
+            // If activity is a non-instantiated class, instantiate it.
+            if (!(activity instanceof Backbone.Activity)) activity = new activity();
+
+            activity.router = this;
+            activity.parent = parent || undefined;
+            activity.name = activityName.toLowerCase();
+            activity._isSetup = true;
+            
+            this._activities[activityName] = activity;
+
+            return activity;
+        },
+
         // Takes either a url fragment (e.g. #!/people/john)
         // or an activities route string (e.g. people::detail)
         // and returns the activity hierarchy associated with that route.
         _getFragmentRoute: function(fragment) {
-            var parts, result, i, activities = [], subactivities = this.activities;
+            var parts, result, i, parent,
+                activities = [];
 
             // Case for activities route string
-            if ((parts = fragment.split('::')).length > 0) {
+            if ((handlerParts = fragment.split('::')).length > 0) {
 
-                _.each(parts, function (name) {
-                    if (subactivities) {
-                        activities.push(subactivities[name]);
-                        subactivities = subactivities[name] && subactivities[name].handlers;
-                    }
-                });
+                if (!this._activities[handlerParts.join("-")]){
+                    activities = this._processActivityRoute(fragment);
+                }
+                else {
+                    _.each(handlerParts, function (localName, i) {
+                        activityName = handlerParts.slice(0, i + 1).join("-");
+                        activities.push( this._activities[activityName] );
+                    });
+                }
 
                 result = {
                     activities: activities
