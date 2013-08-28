@@ -560,6 +560,10 @@
                 return activity.onStop.apply(activity, router._currentArgs);
             },
 
+            stopListening = function () {
+                return activity.stopListening();
+            },
+
             removeClassFromDOM = function() {
                 if (router._$el) {
                     router._$el.removeClass("activity-" + activity.name);
@@ -568,6 +572,7 @@
 
             return $.when( stopActivity() )
                 .then(processTaskQueue)
+                .then(stopListening)
                 .then(removeClassFromDOM);
         },
 
