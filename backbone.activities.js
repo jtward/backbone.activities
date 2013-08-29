@@ -281,7 +281,6 @@
 
                 // Else if it's an array then iterate over each item
                 else if (_.isArray(entity.redirect)) {
-                    console.log("array");
                     for (j = 0; j < entity.redirect.length; j++) {
                       r = entity.redirect[j];
                       redirect = r && r.apply(entity, args);
@@ -353,7 +352,7 @@
                 });
 
                 // If all activities are the same, but arguments have changed, reinit the deepest activity
-                if (index > 0 && index === router._currentActivities.length && args !== router._currentArgs && args && _.intersetion(args, router._currentArgs).length === args.length) {
+                if (index > 0 && index === router._currentActivities.length && args !== router._currentArgs && args && _.intersection(args, router._currentArgs).length !== args.length) {
                     index -= 1;
                 }
 
