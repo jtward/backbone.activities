@@ -342,14 +342,19 @@
             newActivities,
 
             getChangedActivities = function () {
+                var i, index, oldActivity, newActivity;
+
                 // Find the index of the first activity that is different to the already loaded activities
-                var index = router._currentActivities.length;
-                _.find(router._currentActivities, function (activity, i) {
-                    if (!activities[i].name || activity.name !== activities[i].name) {
+                index = router._currentActivities.length;
+                for (i = 0; i < router._currentActivities.length; i++) {
+                    oldActivity = router._currentActivities[i];
+                    newActivity = activities[i];
+
+                    if (!newActivity.name || newActivity.name !== oldActivity.name) {
                         index = i;
-                        return true;
+                        break;
                     }
-                });
+                }
 
                 // If all activities are the same, but arguments have changed, reinit the deepest activity
                 if (index > 0 && index === router._currentActivities.length && args !== router._currentArgs && args && _.intersection(args, router._currentArgs).length !== args.length) {
