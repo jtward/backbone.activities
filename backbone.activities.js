@@ -628,8 +628,17 @@
 
     });
 
-    // use backbone's extend (referencing via View here, but they're all the same)
-    Backbone.Activity.extend = Backbone.View.extend;
+    // Wrap Backbone's extend to also merge tasks
+    Backbone.Activity.extend = function () {
+
+        // Do a normal extend
+        var child = Backbone.View.extend.apply(this, arguments);
+
+        // Merge tasks
+        _.defaults(child.prototype.tasks, this.prototype.tasks);
+
+        return child;
+    };
 
     // Activity constructor
     Backbone.ActivityRouteHandler = Backbone.Activity.extend({
