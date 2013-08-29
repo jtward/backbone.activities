@@ -620,7 +620,7 @@
 
         // Runs the task 'taskName'
         runTask: function (taskName) {
-            var task = this.tasks[taskName];
+            var task = (typeof taskName === "function") ? taskName : this.tasks[taskName];
             if (task) return task.apply(this, this.router._currentArgs);
         },
 
