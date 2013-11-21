@@ -1,551 +1,656 @@
-(function(root) {
-  "use strict";
+/*jshint newcap:false */
+(function(root, factory) {
+    "use strict";
 
-  var Backbone = root.Backbone;
-  var _ = root._ || root.underscore || root.lodash;
-  var $ = Backbone.$ || root.$ || root.jQuery || root.Zepto || root.ender;
-  var when = Backbone.Layout.prototype.options.when;
+    var Backbone, _, $;
 
-  var VERSION = '0.7.1';
+    // AMD. Register as an anonymous module.  Wrap in function so we have access
+    // to root via `this`.
+    if (typeof define === "function" && define.amd) {
+        return define(["backbone", "underscore", "jquery"], function() {
+            var args = [root].concat( Array.prototype.slice.call(arguments) );
+            return factory.apply(root, args);
+        });
+    }
 
-  Backbone.ActivityRouter = Backbone.Router.extend({
+    // Node. Does not work with strict CommonJS, but only CommonJS-like
+    // enviroments that support module.exports like Node.
+    if (typeof exports === 'object') {
+        Backbone = require('backbone');
+        _ = require('lodash');
+        $ = _.extend(require('cheerio'), require("underscore.deferred"));
+        module.exports = factory(root, Backbone, _, $);
+    }
 
-    constructor: function(options) {
-      options = options || {};
+    // Browser globals.
+    Backbone = root.Backbone;
+    _ = root._ || root.underscore || root.lodash;
+    $ = (Backbone && Backbone.$) || root.$ || root.jQuery || root.Zepto || root.ender;
+    _.extend(Backbone, factory.call(root, root, Backbone, _, $));
 
-      // an ActivityRouter's el is the point at which the layout class is added.
-      // this lets you hook CSS onto specific layouts
-      this._$el = $(options.el || this.el || document.body);
+})(typeof global === "object" ? global : this, function (root, Backbone, _, $) {
+    "use strict";
 
-      // regions is an object of region names to Layouts.
-      // e.g. { 'main': new Backbone.Layout({ el: '#main' }), ... }
-      this.regions = options.regions || this.regions;
+    var asyncEach = function (array, cb, context, args) {
+        var dfd = $.Deferred(),
+            i = -1;
 
-      // activityRoutes is an optional map from url fragments to activity::handler strings
-      this.activityRoutes = options.activityRoutes || this.activityRoutes;
+        var iterate = function (array, cb, dfd) {
+            i++;
+            if (i >= array.length) return dfd.resolveWith(context);
 
-      // defaultRoute is a url fragment. It may be specified in the class or overridden
-      // when instantiated
-      this._defaultRoute = options.defaultRoute || this.defaultRoute;
+            $.when( cb.call(context, array[i], i, args) )
+                .always(function () {
+                    iterate(array, cb, dfd);
+                });
+        };
 
-      // initialLayout is a string. If defined, the layout is set later in the constructor
-      // It may be specified in the class or overridden when instantiated
-      this._initialLayout = options.initialLayout || this.initialLayout;
+        iterate(array, cb, dfd);
 
-      // authenticate is the function that checks whether the user is authenticated
-      this.authenticate = options.authenticate || this.authenticate;
+        return dfd;
+    };
 
-      // authenticateRedirect is the route that is fired if authentication fails
-      this.authenticateRedirect = options.authenticateRedirect || this.authenticateRedirect;
+    var VERSION = '0.8.0dev';
 
-      // routes is an array of objects which contain the route RegEx as well as the
-      // corresponding activity and handler
-      this._routes = [];
+    Backbone.ActivityRouter = Backbone.Router.extend({
 
-      if (this.activityRoutes) {
+        constructor: function(options) {
+            options = options || {};
 
-        _.each(this.activities, function(activity, activityName) {
-          // give the activity a reference to the router
-          activity.router = this;
-        }, this);
+            // an ActivityRouter's el is the point at which the layout class is added.
+            // this lets you hook CSS onto specific layouts
+            var el = options.el || this.el || (document && document.body);
+            if (el) this._$el = $(el);
 
-        _.each(this.activityRoutes, function(handlerString, route) {
-          var handlerParts = handlerString.split('::');
-          var activityName;
-          var handlerName;
-          var activity;
-          var handler;
-          if (handlerParts.length !== 2) {
-            throw new Error("Invalid activity::handler string: " + handlerString);
-          }
-          activityName = handlerParts[0];
-          handlerName = handlerParts[1];
-          activity = this.activities[activityName];
-          if (!activity) {
-            throw new Error("Activity " + activityName + " not found");
-          }
-          if (!activity.handlers) {
-            throw new Error("No handlers found for activity " + activityName);
-          }
-          handler = activity.handlers[handlerName];
-          if (!handler) {
-            throw new Error("No handler " + handlerName + " found for activity " + activityName);
-          }
-          this._hookHandler(handler, activity);
-          this._addRoute(activityName, handlerName, route);
-        }, this);
-      }
-      else {
-        // create a route for each entry in each activity's routes object
-        _.each(this.activities, function(activity, activityName) {
+            // routes is an optional map from url fragments to either functions on the router (like ordinary Backbone routers)
+            // or activity::subactivity strings
+            this.routes = this.activityRoutes = options.activityRoutes || options.routes || this.activityRoutes || this.routes;
 
-          // give the activity a reference to the router
-          activity.router = this;
-          activity.handlers = activity.handlers || {};
-          _.each(activity.routes, function(handlerName, route) {
-            var handler;
+            // defaultRoute is a url fragment. It may be specified in the class or overridden
+            // when instantiated
+            this._defaultRoute = options.defaultRoute || this.defaultRoute;
 
-            // the handler may be attached directly to the routes object
-            // if so, put it in handlers and use route as its name
-            if (handlerName instanceof Backbone.ActivityRouteHandler) {
-              activity.handlers[route] = handlerName;
-              handlerName = route;
+            // initialLayout is a string. If defined, the layout is set later in the constructor
+            // It may be specified in the class or overridden when instantiated
+            this._initialLayout = options.initialLayout || this.initialLayout;
+
+            // Stores a reference to each activity by name
+            this._activities = {};
+
+            // Intially empty arrays which hold a list of the currently active activities
+            this._currentActivities = [];
+
+            // routes is an array of objects which contain the route RegEx as well as the
+            // corresponding activity and handler
+            this._routes = [];
+
+            // call Backbone.Router.bindRoutes to process defined routes
+            this._bindRoutes();
+
+            // set up the default route
+            if (_.isString(this._defaultRoute)) {
+                // the default route may contain arguments
+                this._defaultRoute = this._getFragmentRoute(this._defaultRoute);
+                this._addRoute('', this._defaultRoute.args);
             }
 
-            handler = activity.handlers[handlerName];
-            if (handler) {
-              this._hookHandler(handler, activity);
-              this._addRoute(activityName, handlerName, route);
+            // initialize initial layout.
+            // if the router is responsive, setLayout should be called whenever the desired
+            // layout changes.
+            if (this._initialLayout) {
+                this.setLayout(this._initialLayout);
+            }
+
+            // Call router's initialize functions
+            this.initialize.apply(this, arguments);
+        },
+
+        // Wraps Backbone.Router.Route to add support for Activity::SubActivity strings 
+        // and binding arguments to routes.
+        // Supports everything that Backbone.Router.Route supports
+        route: function (route, handlerString, callback, args) {
+            var nativeRoute = Backbone.Router.prototype.route;
+
+            // If callback is passed, then route is a custom route:
+            // defer to Backbone.Router.route
+            if (callback) {
+                return nativeRoute.apply(this, arguments);
+            }
+
+            // If no callback, but 'handlerString' matches a function on the router
+            // then route is an ordinary Backbone route: call Backbone.Router.route
+            // with the handlerString as the name
+            if (this[handlerString] && typeof this[handlerString] === "function") {
+                return nativeRoute.call(this, route, handlerString);
+            }
+
+            // Else route is an ActivityRoute: first we process the
+            // Activity::SubActivity string into an array of activities
+            var activities = this._processActivityRoute(handlerString);
+
+            // If route is not a RegExp, convert it to one
+            if (!_.isRegExp(route)) route = this._routeToRegExp(route);
+
+            // The we add the route to the internal array
+            this._routes.push({
+                route: route,
+                activities: activities,
+                args: args // args is used only for defaultRoute
+            });
+
+            // Finally we call Backbone.Router.route with a custom callback function
+            // using the  complete handlerString as name for uniqueness
+            var router = this;
+            return nativeRoute.call(this, route, handlerString, function() {
+                router._internalFragment = Backbone.history.fragment;
+                router._handleRoute(activities, args || Array.prototype.slice.apply(arguments));
+            });
+        },
+
+        // Processes an Activity::SubActivity string into an array of activities,
+        // and configures those activities as necessary
+        _processActivityRoute: function (handlerString) {
+            var i,
+                handlerParts = handlerString.split('::'),
+                parent,
+                activities = [],
+                activity,
+                activityName, localName,
+                subactivities = this.activities;
+
+            activity = this.activities;
+            for (i = 0; i < handlerParts.length; i++) {
+                activityName = handlerParts.slice(0, i + 1).join("-");
+                localName = handlerParts[i];
+
+                // Attempt to fetch activity from cache
+                activity = this._activities[activityName];
+
+                // If no cached activity, create one
+                if (!activity) {
+                    activity = (subactivities && subactivities[ localName ]);
+
+                    if (activity) {
+                        parent = (activities.length > 0) ? activities[activities.length - 1] : undefined;
+                        activity = this._setupActivity(activity, activityName, parent);
+                    }
+                }
+
+                // If could not creat one, then exit early
+                if (!activity) break;
+
+                // Push activity to list, and get subactivities for further processing
+                activities.push(activity);
+                subactivities = activity && (activity.subactivities || activity.handlers);
+            }
+
+            // If no activities were found for a given route, throw an error
+            if (activities.length < 1) {
+                throw new Error("Activity '" + activityName + "' not found (note: activity names are case sensitive)");
+            }
+            // If some activities were found, but not all of the specfied ones, then warn but continue
+            else if (activities.length < handlerParts.length) {
+                root.console.warn("Sub-activity '" + activityName + "' not found, resolving to " + _.pluck(activities, "name").join("::"));
+            }
+
+            return activities;
+        },
+
+        _setupActivity: function(activity, activityName, parent) {
+            // If activity is a non-instantiated class, instantiate it.
+            if (!(activity instanceof Backbone.Activity)) activity = new activity();
+
+            activity.router = this;
+            activity.parent = activity.activity = parent || undefined;
+            activity.name = activityName.toLowerCase();
+            activity._isSetup = true;
+            
+            this._activities[activityName] = activity;
+
+            return activity;
+        },
+
+        // Takes either a url fragment (e.g. #!/people/john)
+        // or an activities route string (e.g. people::detail)
+        // and returns the activity hierarchy associated with that route.
+        _getFragmentRoute: function(fragment) {
+            var handlerParts, result, i, parent, activityName,
+                activities = [];
+
+            // Trim # characters from start of fragment
+            fragment = fragment.replace(/^#+/, '');
+
+            // Check if a route with given fragment exists
+            for (i = this._routes.length - 1; i >= 0; i -= 1) {
+                if (this._routes[i].route.test(fragment)) {
+                    result = this._routes[i];
+                    break;
+                }
+            }
+
+            // If it does then fetch arguments, and return it
+            if (result) {
+                var args = this._extractParameters(result.route, fragment);
+                if (args) {
+                    result.args = args;
+                }
+            }
+            // Else, treat fragment as an Activity::SubActivity string
+            else {
+                handlerParts = fragment.split('::');
+
+                if (!this._activities[handlerParts.join("-")]){
+                    activities = this._processActivityRoute(fragment);
+                }
+                else {
+                    _.each(handlerParts, function (localName, i) {
+                        activityName = handlerParts.slice(0, i + 1).join("-");
+                        activities.push( this._activities[activityName] );
+                    }, this);
+                }
+
+                result = {
+                    activities: activities
+                };
+            }
+            
+            return result;
+        },
+
+        // handle a route
+        // checks for a redirect first; if found, calls _redirectRoute
+        // otherwise calls _handleLifecycle
+        _handleRoute: function(activities, args, alreadyIntercepted) {
+            var i, j, entity, r, activity, redirect;
+
+            // Only attempt to route if Backbone history has started
+            if (!Backbone.History.started) return root.console.warn("Not routing: Backbone history not started.");
+
+            // Router + activities
+            var redirectEntities = [this].concat(activities);
+
+            // Search router + activities in hierachy for 'redirect' property
+            for (i = 0; i < redirectEntities.length; i++) {
+              entity = redirectEntities[i];
+
+                // If redirect property is a function, call it and return its return value
+                if (typeof entity.redirect === "function") {
+                    redirect = entity.redirect.apply(entity, args);
+                    if (redirect) break;
+                }
+
+                // Else if it's an array then iterate over each item
+                else if (_.isArray(entity.redirect)) {
+                    for (j = 0; j < entity.redirect.length; j++) {
+                      r = entity.redirect[j];
+                      redirect = r && r.apply(entity, args);
+                      if (redirect) break;
+                    }
+                }
+            }
+
+            // If a redirect was found, then redirect
+            if (redirect && redirect.toLowerCase().replace("::", "-") !== _.last(activities).name) return this._redirectRoute(redirect);
+
+            // If a navInterceptor exists, and has not already been called, call it
+            if (this.navInterceptor && !alreadyIntercepted) {
+                return this._interceptRoute(activities, args);
+            }
+
+            // Otherwise continue the activity lifecycle
+            root.console.log("Routing to " + _.pluck(activities, "name").join("::"));
+            return this._handleLifecycle(activities, args);
+        },
+
+        _redirectRoute: function(redirect) {
+            if (redirect.trigger) {
+                // if trigger is true we know that the fragment is not an Activity::handler string
+                this.navigate(redirect.fragment, redirect);
             }
             else {
-              throw new Error("No handler \"" + handlerName +
-                "\" found for activity \"" + activityName + "\"");
+                this._internalFragment = redirect;
+                redirect = this._getFragmentRoute(redirect);
+                return this._handleRoute(redirect.activities, redirect.args);
             }
-          }, this);
-        }, this);
-      }
-
-      // set up the default route
-      if (_.isString(this._defaultRoute)) {
-
-        // the default route may contain arguments
-        this._defaultRoute = this._getFragmentRoute(this._defaultRoute);
-        this._addRoute(this._defaultRoute.activityName, this._defaultRoute.handlerName, '', this._defaultRoute.args);
-      }
-
-      // initialize initial layout.
-      // if the router is responsive, setLayout should be called whenever the desired
-      // layout changes.
-      if (this._initialLayout) {
-        this.setLayout(this._initialLayout);
-      }
-
-      // manually call the superclass constructor
-      Backbone.Router.prototype.constructor.call(this, options);
-    },
-
-    // setLayout sets the app layout. This triggers the corresponding layout in the current
-    // activity's current route handler
-    setLayout: function(name) {
-      var activity = this.activities[this._currentActivityName];
-      var handler;
-
-      // update the layout class on the parent element
-      if (this._$el) {
-        this._$el.removeClass('layout-' + this.currentLayout)
-          .addClass('layout-' + name);
-      }
-
-      this.currentLayout = name;
-
-      if (activity) {
-        handler = activity.handlers[this._currentHandlerName];
-
-        if (handler && handler.layouts && handler.layouts[this.currentLayout]) {
-          handler.layouts[this.currentLayout].apply(handler, this._currentArgs);
-
-        }
-      }
-    },
-
-    // Handle the activity lifecycle
-    _didRoute: function(activityName, handlerName, args) {
-
-      var didChangeActivity = this._currentActivityName !== activityName;
-      var activity = this.activities[this._currentActivityName];
-      var handler = activity && activity.handlers[this._currentHandlerName];
-
-      // first, stop the old route
-      if (handler) {
-        handler.onStop();
-      }
-
-      if (activity && didChangeActivity) {
-        activity.onStop();
-      }
-
-      // old route is stopped, change the current route
-
-      this._$el.removeClass('activity-' + this._currentActivityName)
-          .removeClass('activityhandler-' + this._currentActivityName + '-' + this._currentHandlerName);
-
-      this._currentActivityName = activityName;
-      this._currentHandlerName = handlerName;
-      this._currentArgs = args;
-      activity = this.activities[activityName];
-      handler = activity.handlers[handlerName];
-
-      this._$el.addClass('activity-' + this._currentActivityName)
-          .addClass('activityhandler-' + this._currentActivityName + '-' + this._currentHandlerName);
-
-      // start the new route
-      if (!activity._initialized) {
-        activity.onCreate();
-        activity._initialized = true;
-      }
-
-      if (didChangeActivity) {
-        activity.onStart();
-      }
-
-      if (!handler._initialized) {
-        handler.onCreate();
-        handler._initialized = true;
-      }
-
-      handler.onStart.apply(handler, this._currentArgs);
-
-      if (this.currentLayout &&
-        handler.layouts &&
-        typeof handler.layouts[this.currentLayout] === 'function') {
-        handler.layouts[this.currentLayout].apply(handler, this._currentArgs);
-      }
-    },
-
-    // When called once authenticated, calls didRoute using the current URL fragment
-    resolveAuthentication: function() {
-      var fragment = Backbone.history.fragment;
-      var routeObj = this._getFragmentRoute(fragment);
-      if(routeObj) {
-        var redirect = this._authenticateRoute(routeObj.activityName, routeObj.handlerName, routeObj.args);
-
-        // if authentication passed then a redirect will not be returned
-        if (!redirect) {
-          // call didRoute to show the protected page
-          this._didRoute.call(this, routeObj.activityName, routeObj.handlerName, routeObj.args);
-        }
-      }
-    },
-
-    _handleRoute: function(activityName, handlerName, args) {
-      var redirect = this._authenticateRoute(activityName, handlerName, args);
-
-      // allow the redirect to provided via a function call
-      if (_.isFunction(redirect)) {
-        redirect = redirect();
-      }
-
-      // if the redirect is a URL fragment, extract the activity info
-      if (_.isString(redirect)) {
-        redirect = this._getFragmentRoute(redirect);
-      }
-
-      // delegate to didRoute to implement the activity lifecycle
-      if (redirect) {
-        this._didRoute(redirect.activityName, redirect.handlerName, redirect.args);
-      }
-      else {
-        this._didRoute(activityName, handlerName, args);
-      }
-    },
-
-    _authenticateRoute: function(activityName, handlerName, args) {
-      var activity = this.activities[activityName];
-      var handler = activity.handlers[handlerName];
-      var authenticatorContext;
-      var redirect;
-      var redirectContext;
-
-      // if the activity is protected and there is an authenticator, check the authentication.
-      // If the authentication fails then return the redirect
-      var handlerAuth = handler.authenticate;
-      var activityAuth = activity.authenticate;
-      var routerAuth = this.authenticate;
-
-      // authenticator precedence: handler > activity > router
-      var authenticator = handlerAuth || activityAuth || routerAuth;
-
-      var handlerRedirect;
-      var activityRedirect;
-      var routerRedirect;
-
-      // use authentication if protected and there is an authenticator
-      if (authenticator && (handler.isProtected || activity.isProtected)) {
-
-        authenticatorContext = handlerAuth ? handler : (activityAuth ? activity : this);
-
-        // authentication fails if a falsy value is returned
-        if (!authenticator.call(authenticatorContext, activityName, handlerName, args)) {
-
-          handlerRedirect = handler.authenticateRedirect;
-          activityRedirect = activity.authenticateRedirect;
-          routerRedirect = this.authenticateRedirect;
-
-          redirect = handlerRedirect || activityRedirect || routerRedirect;
-
-          if (_.isFunction(redirect)) {
-            // redirect context for a handler or activity is the activity
-            redirectContext = handlerRedirect ? handler : (activityRedirect ? activity : this);
-            redirect = redirect.call(redirectContext, activityName, handlerName, args);
-          }
-
-          return redirect;
-        }
-      }
-      return false;
-    },
-
-    // return the data for a fragment
-    _getFragmentRoute: function(fragment) {
-      var result = _.clone(_.find(this._routes, function(routeObj) {
-        return routeObj.route.test(fragment);
-      }, this));
-      var args = this._extractParameters(result.route, fragment);
-      if (args) {
-        result.args = args;
-      }
-      return result;
-    },
-
-    // hooks up a handler to its activity and to the router
-    _hookHandler: function(handler, activity) {
-      handler.router = this;
-      handler.regions = this.regions;
-      handler.activity = activity;
-    },
-
-    // hook up a route to an activity and handler
-    _addRoute: function(activityName, handlerName, route, args) {
-      // add this route to the internal array
-      this._routes.push({
-        route: this._routeToRegExp(route),
-        activityName: activityName,
-        handlerName: handlerName,
-        args: args
-      });
-
-      // use the activity name plus the route handler name for uniqueness
-      this.route(route, activityName + '-' + handlerName, _.bind(function() {
-
-        this._handleRoute(activityName,
-          handlerName,
-          args || Array.prototype.slice.apply(arguments));
-
-      }, this));
-    },
-
-    // updateRegions takes an object of regions by name
-    // For each region given, the corresponding views are inserted. See updateRegion
-    // below for details.
-    updateRegions: function(regions) {
-
-      var promises = [];
-      _.each(regions, function(views, regionName) {
-        promises.push(this.updateRegion(regionName, views));
-      }, this);
-
-      return when(promises);
-    },
-
-    // updateRegion takes a region and either a view or an object with a template
-    //  and a views object.
-    // The views are inserted into the region, replacing any existing views.
-    //
-    // Example: passing a single view:
-    //   updateRegion('main', view);
-    //
-    // Example: passing an array of views (note that if the views' templates are not
-    //  cached and differ then LayoutManager does not guarantee that the views will be
-    //  inserted into the document in order):
-    //   updateRegion('main', [ myViewUsingTamplateFoo, myOtherViewUsingTemplateFoo ])
-    //
-    // Example: passing an object of views:
-    //   updateRegion('main', {
-    //     template: 'mytemplate',
-    //     views: {
-    //       '.myclass': myView
-    //     }
-    //   })
-    //
-    updateRegion: function(region, views) {
-      var that = this;
-
-      // retrieve the actual region by its name
-      // if updateRegion was called recursively, we already have the actual region
-      if (typeof region === "string") {
-        region = this.regions[region];
-      }
-
-      if (region._isRendering) {
-        // keep a copy of the views so that we can update with them once the current views finish rendering
-        region._nextViews = views;
-        // don't do anything until the previous render is complete
-        return;
-      }
-
-      // beware: hacks; we need to remove the views that were present previously
-      // also set hasRendered to false so that LM doesn't ditch the new views when render is called
-      region._removeViews(true);
-      region.__manager__.hasRendered = false;
-
-      // reset the template for the region for the first two cases
-      // (given a view; given an array of views)
-      region.template = undefined;
-
-      // Clear any remaining HTML in the region
-      // This might have been left over from a previous template
-      region.$el.empty();
-
-      // if we have a single view, insert it directly into the region
-      if (views instanceof Backbone.View) {
-        region.insertView('', views);
-      }
-
-      // if we have an array of views, insert them
-      // beware: if the templates for the views are different then LM may not render them in order!
-      else if (_.isArray(views)) {
-        region.setViews({
-          '': views
-        });
-      }
-
-      // set the template of the region and then insert the views into their places
-      else if (_.isObject(views)) {
-        region.template = views.template;
-        region.setViews(views.views);
-      }
-
-      // set the _isRendering flag to true so that if new views come in they know to wait
-      region._isRendering = true;
-
-      // listen for afterRender so that we can update with any new views that could be waiting
-      region.on('afterRender', function listener() {
-        // rendering finished
-        var nextViews = region._nextViews;
-
-        // clean up
-        region.off('afterRender', listener);
-        region._isRendering = false;
-
-        // check for next views
-        if (nextViews) {
-          // there are views waiting; update!
-          region._nextViews = undefined;
-          that.updateRegion(region, nextViews);
-        }
-      });
-
-      // render the region and all of its views
-      return region.render();
-    },
-
-    VERSION: VERSION
-
-  });
-
-  // Activity constructor
-  Backbone.Activity = function(options) {
-      this._configure(options || {});
-      this.initialize.apply(this, arguments);
+        },
+
+        _interceptRoute: function(activities, args) {
+            var options, deepestActivity;
+
+            // Get a reference to the deepest activity
+            deepestActivity = activities[ activities.length - 1 ];
+
+            // Get interception options off the deepest actvity
+            options = deepestActivity.navigatorOptions || {};
+            if (_.isFunction(options)) options = options.apply(deepestActivity, args);
+
+            // Call the navInterceptor with the fragment and options
+            this.navInterceptor.navigate({
+                'fragment': this._internalFragment,
+                'options': options
+            }, {});
+        },
+
+        // Handle the activity lifecycle
+        _handleLifecycle: function(activities, args) {
+            var router = this,
+
+            // Activities to be stopped (set in getChangedActivities)
+            oldActivities,
+
+            // Activities to be started (set in getChangedActivities)
+            newActivities,
+
+            getChangedActivities = function () {
+                var i, index, oldActivity, newActivity;
+
+                // Find the index of the first activity that is different to the already loaded activities
+                index = router._currentActivities.length;
+                for (i = 0; i < router._currentActivities.length; i++) {
+                    oldActivity = router._currentActivities[i];
+                    newActivity = activities[i];
+
+                    if (!newActivity.name || newActivity.name !== oldActivity.name) {
+                        index = i;
+                        break;
+                    }
+                }
+
+                // If all activities are the same, but arguments have changed, reinit the deepest activity
+                if (index > 0 && index === router._currentActivities.length && args !== router._currentArgs && args && _.intersection(args, router._currentArgs).length !== args.length) {
+                    index -= 1;
+                }
+
+                // Old actvities are activity in currentActivities past index
+                // Reverse order so that deepest is deinitialized first
+                oldActivities = router._currentActivities.slice(index).reverse();
+
+                // new activities are activities in 'activities' past index
+                newActivities = activities.slice(index);
+            },
+
+            // Call stop methods and remove classes of old activities, deepest first
+            stopOldActivities = function () {
+                return asyncEach(oldActivities, function (activity) {
+                    activity.stop();
+                });
+            },
+
+            // Store current activities and arguments    
+            saveActivities = function () {
+                router._currentActivities = activities;
+                router._currentArgs = args;
+            },
+
+            // Call start methods on new activities (deepest last)
+            startNewActivities = function () {
+                asyncEach(newActivities, function (activity) {
+                    activity.start(args);
+                });
+            };
+
+            return $.when( getChangedActivities() )
+                .then(stopOldActivities)
+                .then(saveActivities)
+                .then(startNewActivities);
+
+        },
+
+        // Invokes an activity hierarchy without changing the URL fragment
+        silentRoute: function (fragment) {
+            this._internalFragment = fragment;
+            var route = this._getFragmentRoute(fragment);
+            return route && this._handleRoute(route.activities, route.args);
+        },
+
+        // Re-invokes the current activity hierarchy
+        reload: function() {
+            // Only attempt to reload if Backbone history has started
+            if (!Backbone.History.started) return;
+
+            return this.silentRoute(Backbone.history.fragment);
+        },
+
+        interceptNavigation: function(interceptor) {
+            var router = this;
+            this.navInterceptor = interceptor;
+
+            // TODO: allow use of Activity::handler strings
+            interceptor.on('navigate', function(fragment) {
+                // navigation instigated by native side
+                router.navigate(fragment, true);
+            });
+
+            interceptor.on('navigated', function(fragment) {
+                // navigation instigated by web side acknowledged by native side
+                var fragmentObj = router._getFragmentRoute(fragment);
+                router._handleRoute(fragmentObj.activities, fragmentObj.args, true);
+            });
+
+        },
+
+        // Acitivates an app 'layout' by triggering the corresponding layout function in each
+        // activity in the current activity hierarchy (deepest last).
+        // Useful in responsive app for invoking layout specific code
+        setLayout: function(name) {
+            var router = this;
+
+            // If 'name' is already the current layout, return
+            if (router.currentLayout === name) return $.Deferred().resolve();
+
+            // update the layout class on the parent element
+            if (router._$el) {
+                router._$el.removeClass('layout-' + router.currentLayout).addClass('layout-' + name);
+            }
+
+            // Save new layout name
+            router.currentLayout = name;
+
+            // Call activity.layouts[name]() on each activity, deepest last
+            return asyncEach(router._currentActivities, function (activity) {
+
+                var processTaskQueue = function() {
+                    return activity.processTaskQueue.apply(activity, router._currentArgs);
+                },
+
+                callLayoutHandler = function () {
+                    return activity.layouts[router.currentLayout].apply(activity, router._currentArgs);
+                };
+
+                if (activity && activity.layouts && activity.layouts[router.currentLayout]) {
+                    return $.when(callLayoutHandler)
+                        .then(callLayoutHandler);
+                }
+            }, router);
+        },
+
+        VERSION: VERSION
+
+    });
+
+    // Activity constructor
+    Backbone.Activity = function(options) {
+        this._configure(options || {});
+        this.initialize.apply(this, arguments);
     };
 
-  // mix events into the prototype
-  _.extend(Backbone.Activity.prototype, Backbone.Events, {
+    // mix events into the prototype
+    _.extend(Backbone.Activity.prototype, Backbone.Events, {
 
-    // Performs the initial configuration of an Activity with a set of options.
-    // Keys with special meaning *(routes, handlers, authenticate, authenticateRedirect, isProtected)*
-    // are attached directly to the activity.
-    _configure: function(options) {
-      if (options.routes) {
-        this.routes = options.routes;
-      }
-      if (options.handlers) {
-        this.handlers = options.handlers;
-      }
-      if (options.authenticate) {
-        this.authenticate = options.authenticate;
-      }
-      if (options.authenticateRedirect) {
-        this.authenticateRedirect = options.authenticateRedirect;
-      }
-      if (options.isProtected !== null && options.isProtected !== undefined) {
-        this.isProtected = options.isProtected;
-      }
-    },
+        // Performs the initial configuration of an Activity with a set of options.
+        // Keys with special meaning *(routes, subactivities, redirect, layouts)*
+        // are attached directly to the activity.
+        _configure: function(options) {
+            _.extend(this, _.pick(options, "routes", "subactivities", "redirect", "layouts"));
+            if (!this.subactivities && options.handlers) this.subactivities = options.handlers;
+        },
 
-    // Initialize is an empty function by default. Override it with your own
-    // initialization logic.
-    initialize: function() {},
+        // Initialize is an empty function by default. Override it with your own
+        // initialization logic.
+        initialize: function() {},
 
-    // The router uses this value to determine whether to call an activity's onCreate
-    // callback
-    _initialized: false,
+        // The router uses this value to determine whether to call an activity's onCreate
+        // callback
+        _initialized: false,
 
-    // callback stubs
-    onCreate: function() {},
-    onStart: function() {},
-    onStop: function() {},
+        // callback stubs
+        onCreate: function() {},
+        onStart: function() {},
+        onStop: function() {},
 
-    VERSION: VERSION
+        start: function (args) {
+            var activity = this,
+                router = activity.router,
 
-  });
+            processTaskQueue = function() {
+                return activity.processTaskQueue.apply(activity, router._currentArgs);
+            },
 
-  // use backbone's extend (referencing via View here, but they're all the same)
-  Backbone.Activity.extend = Backbone.View.extend;
+            addActivityClassToDOM = function () {
+                if (router._$el) {
+                    router._$el.addClass("activity-" + activity.name);
+                }
+            },
 
-  // Activity constructor
-  Backbone.ActivityRouteHandler = function(options) {
-      this._configure(options || {});
-      this.initialize.apply(this, arguments);
+            saveArgs = function () {
+                activity._currentArgs = args;
+            },
+
+            // Call onCreate if this is the first time the activity has been called
+            initializeActivity = function() {
+                if (!activity._initialized) {
+                    activity._initialized = true;
+                    return activity.onCreate.apply(activity, activity._currentArgs);
+                }
+            },
+
+            // Call activity onStart method
+            startActivity = function () {
+                return activity.onStart.apply(activity, activity._currentArgs);
+            },
+
+            // Call activity layout method with currentLayout
+            setActivityLayout = function () {
+                if (router.currentLayout &&
+                    activity.layouts &&
+                    typeof activity.layouts[router.currentLayout] === 'function') {
+                    activity.layouts[router.currentLayout].apply(activity, activity._currentArgs);
+                }
+            };
+
+            return $.when( addActivityClassToDOM() )
+                .then(saveArgs)
+
+                .then(initializeActivity)
+                .then(processTaskQueue)
+
+                .then(startActivity)
+                .then(processTaskQueue)
+
+                .then(setActivityLayout)
+                .then(processTaskQueue);
+        },
+
+        // Calls an Activity's onStop method and processes the task queue
+        stop: function () {
+            var activity = this,
+                router = activity.router,
+
+            processTaskQueue = function() {
+                return activity.processTaskQueue.apply(activity, router._currentArgs);
+            },
+
+            stopActivity = function () {
+                return activity.onStop.apply(activity, router._currentArgs);
+            },
+
+            stopListening = function () {
+                return activity.stopListening();
+            },
+
+            removeClassFromDOM = function() {
+                if (router._$el) {
+                    router._$el.removeClass("activity-" + activity.name);
+                }
+            };
+
+            return $.when( stopActivity() )
+                .then(processTaskQueue)
+                .then(stopListening)
+                .then(removeClassFromDOM);
+        },
+
+        // layouts is an object of layout names to layout functions
+        layouts: {},
+
+        // tasks is an object of task names to task functions
+        tasks: {},
+
+        // the queueTasks function uses this to store queued tasks 
+        _taskQueue: [],
+
+        // Adds specified tasks to the task queue
+        queueTasks: function (/* taskNames */) {
+            this._taskQueue.push.apply(this._taskQueue, arguments);
+        },
+
+        // Adds the specified tasks to the task queue,
+        // but only if they are not already in it
+        queueTasksOnce: function (/* taskNames */) {
+            _.each(arguments, function (taskName) {
+                if (_.indexOf(this._taskQueue, taskName) === -1) {
+                    this._taskQueue.push(taskName);
+                }
+            }, this);
+        },
+
+        // Call each of the tasks in the task queue in order,
+        // and then clears the task queue.
+        processTaskQueue: function () {
+            return asyncEach(this._taskQueue, this.runTask, this)
+                .always(function() {
+                    this._taskQueue = [];
+                });
+        },
+
+        // Runs the specified tasks in order
+        runTasks: function (/* taskNames */) {
+            return asyncEach(arguments, this.runTask, this);
+        },
+
+        // Runs the task 'taskName'
+        runTask: function (taskName) {
+            var task = (typeof taskName === "function") ? taskName : this.tasks[taskName];
+            if (task) return task.apply(this, this.router._currentArgs);
+        },
+
+        VERSION: VERSION
+
+    });
+
+    // Wrap Backbone's extend to also merge tasks
+    Backbone.Activity.extend = function () {
+
+        // Do a normal extend
+        var child = Backbone.View.extend.apply(this, arguments);
+
+        // Merge tasks
+        _.defaults(child.prototype.tasks, this.prototype.tasks);
+
+        return child;
     };
 
-  // mix events into the prototype
-  _.extend(Backbone.ActivityRouteHandler.prototype, Backbone.Events, {
+    // Activity constructor
+    Backbone.ActivityRouteHandler = Backbone.Activity.extend({
+        updateRegions: function () {
+            root.console.error("The updateRegions function has been removed from backbone.activities. Please use built in LayoutManager function instead.");
+        }
+    });
 
-    // regions is a map from region names to region objects.
-    // Setup is handled by the ActivityRouter constructor.
-    // This object will be the same for all handlers associated with the same router.
-    regions: {},
-
-    // layouts is an object of layout names to layout functions
-    layouts: {},
-
-    // Performs the initial configuration of an ActivityRouteHandler with a set of options.
-    // Keys with special meaning *(layouts, authenticate, authenticateRedirect, isProtected)*
-    // are attached directly to the activity.
-    _configure: function(options) {
-      if (options.layouts) {
-        this.layouts = options.layouts;
-      }
-      if (options.authenticate) {
-        this.authenticate = options.authenticate;
-      }
-      if (options.authenticateRedirect) {
-        this.authenticateRedirect = options.authenticateRedirect;
-      }
-      if (options.isProtected !== null && options.isProtected !== undefined) {
-        this.isProtected = options.isProtected;
-      }
-    },
-
-    // Initialize is an empty function by default. Override it with your own
-    // initialization logic.
-    initialize: function() {},
-
-    // The router uses this value to determine whether to call an activity's onCreate
-    // callback
-    _initialized: false,
-
-    updateRegions: function(regions) {
-      return this.router.updateRegions(regions);
-    },
-
-    updateRegion: function(region, views) {
-      return this.router.updateRegion(region, views);
-    },
-
-    // callback stubs
-    onCreate: function() {},
-    onStart: function() {},
-    onStop: function() {},
-
-    VERSION: VERSION
-
-  });
-
-  // use backbone's extend (referencing via View here, but they're all the same)
-  Backbone.ActivityRouteHandler.extend = Backbone.View.extend;
-
-  // The module returns Backbone.
-  return Backbone;
-}(this));
+    // The module returns Activity and ActivityRouter
+    return {
+        "Activity": Backbone.Activity,
+        "ActivityRouteHandler": Backbone.ActivityRouteHandler,
+        "ActivityRouter": Backbone.ActivityRouter
+    };
+});

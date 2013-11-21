@@ -3,21 +3,25 @@ backbone.activities
 
 Backbone Activities is a [Backbone](https://github.com/documentcloud/backbone) plugin which makes it easier to create and organize responsive web apps. It borrows ideas, and its name, from Android's Activities, so some concepts may be familiar to Android developers.
 
-Three additional Backbone entities are provided: `Backbone.Activity`, `Backbone.ActivityRouteHandler` and `Backbone.ActivityRouter`, which extends `Backbone.Router`.
+Two additional Backbone entities are provided: `Backbone.Activity` which provides controller functionality and `Backbone.ActivityRouter`, which extends `Backbone.Router` and makes it easy to route to activities.
 
-Dependencies are [Backbone](https://github.com/documentcloud/backbone) and [Backbone.layoutmanager](https://github.com/tbranyen/backbone.layoutmanager).
+Dependencies are [Backbone](https://github.com/documentcloud/backbone) <del>and [Backbone.layoutmanager](https://github.com/tbranyen/backbone.layoutmanager)</del> <ins>Backbone.Layoutmanager is no longer a dependency - use whichever view management system you like with activities!</ins>
 
-Latest version: 0.7.1
+Latest version: 0.8.0dev
 
 
-### Activities
-In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. An activity should encompass the behaviour and layouts for a single page on the largest form factor that you support. In the list/detail example, the list and detail pages would be handled by a single activity.
+### Why Activities?
+In a responsive web app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. In this scenario, the vanilla Backbone approach of having a 1:1 relationship between routes and views breaks down. One approach to solving this problem would be to have a code fork in each route handling function which called different code depending on which layout is currently showing. But that means keeping track of the current layout, and maintaining a boilerplate if-else in every route. And what do you do when the user rotates their device and the layout needs to change? Activities provides a structured way of dealing with these common issues.
 
-In Backbone, each page for your smallest form factor will have its own route, and so an activity may encompass several routes. In the list/detail example, your activity's routes might be `"!/list"` and `"!/detail/:id"`. The behaviour for these different routes are defined by separate handlers.
+### How to use Activities
+A top-level activity should encompass the behaviour and layouts for a single page on the largest form factor that you support. In the list/detail example, the list and detail pages would be handled by a single top-level activity.
 
-The role of an activity is generally to handle all of the data involved across its handlers, and to delegate the rendering of a page to those handlers. The handler is responsible for rendering content appropriate for the current layout by using the `updateRegions` method.
+In Backbone, each page for your smallest form factor will have its own route, and so a top-level activity may encompass several routes. In the list/detail example, your activity's routes might be `"!/list"` and `"!/detail/:id"`. The behaviour for these different routes are defined by separate child activities of your top-level activity.
+
+The role of the top-level activity is to handle business logic which is common to all of the routes it handles. For example, it might be responsible for creating instances of models, loading data and then delegating the rendering to the relevant child activities. The child activities are responsible for rendering content appropriate for the current layout.
 
 ### The activity lifecycle
+
 ```
 ##################################################
 # Activity                                       #
@@ -65,13 +69,12 @@ The role of an activity is generally to handle all of the data involved across i
 #      #################################        #
 #                                               #
 #################################################
-
 ```
 
 ### Hooking up routes to activities; route handlers
 An activity's `routes` object defines the routes for which an activity is responsible, and the handlers that implement the bahaviour for those routes. For example, the following `routes` object designates responsibility for the `"!/list"` route to a new instance of `MyListHandler`:
 
-```
+```javascript
 routes: {
   "!/list": new MyListHandler()
 }
@@ -79,7 +82,7 @@ routes: {
 
 Alternatively, you can specify a string which is used to look up the handler in the activity's `handlers` object, so the following code has the same effect:
 
-```
+```javascript
 routes: {
   "!/list": 'list'
 },
@@ -93,7 +96,7 @@ If you use the shorthand of attaching a handler directly to the `routes` object,
 A route handler may have `onStart` and `onStop` methods, as well as methods for the application's layouts. Here's an example of an activity with a `list` route handler:
 
 
-```
+```javascript
 var MyListHandler = Backbone.ActivityRouteHandler.extend({
 
   layouts: {
@@ -156,6 +159,28 @@ When authentication fails, the router looks for the `authenticateRedirect` prope
 The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
 
 ## Change Log
+
+### 0.8.0
+
+The following features have been added or improved:
+
+- Support for nesting `Activity` classes (replaces `ActivityRouteHandler`)
+- Async support for activity functions (e.g. onStart)
+- [Tasks](docs/tasks.md) (organise code within an `Activity`)
+- `silentRoute` function (programatically calls route)
+- `reload` function (re-calls current route)
+
+The following features have been removed:
+
+- `ActivityRouteHandler` (use `Activity` instead)
+- Protected routes (use redirects instead)
+- `updateRegions` (use whatever view system you like with Activities)
+- Defining routes on the `Activity` prototype (define them in the `ActivityRouter` instead)
+
+The following features have been deprecated and will be removed in future versions of activities:
+
+- The `activityRoutes` hash (has been renamed to `routes`)
+
 ### 0.7.1
 - Allow routers' el and regions to be provided via prototype and default el to document.body
 
