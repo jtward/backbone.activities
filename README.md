@@ -10,12 +10,15 @@ Dependencies are [Backbone](https://github.com/documentcloud/backbone) <del>and 
 Latest version: 0.8.0dev
 
 
-### Activities
-In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. An activity should encompass the behaviour and layouts for a single page on the largest form factor that you support. In the list/detail example, the list and detail pages would be handled by a single activity.
+### Why Activities?
+In a responsive web app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. In this scenario, the vanilla Backbone approach of having a 1:1 relationship between routes and views breaks down. One approach to solving this problem would be to have a code fork in each route handling function which called different code depending on which layout is currently showing. But that means keeping track of the current layout, and maintaining a boilerplate if-else in every route. And what do you do when the user rotates their device and the layout needs to change? Activities provides a structured way of dealing with these common issues.
 
-In Backbone, each page for your smallest form factor will have its own route, and so an activity may encompass several routes. In the list/detail example, your activity's routes might be `"!/list"` and `"!/detail/:id"`. The behaviour for these different routes are defined by separate handlers.
+### How to use Activities
+A top-level activity should encompass the behaviour and layouts for a single page on the largest form factor that you support. In the list/detail example, the list and detail pages would be handled by a single top-level activity.
 
-The role of an activity is generally to handle all of the data involved across its handlers, and to delegate the rendering of a page to those handlers. The handler is responsible for rendering content appropriate for the current layout by using the `updateRegions` method.
+In Backbone, each page for your smallest form factor will have its own route, and so a top-level activity may encompass several routes. In the list/detail example, your activity's routes might be `"!/list"` and `"!/detail/:id"`. The behaviour for these different routes are defined by separate child activities of your top-level activity.
+
+The role of the top-level activity is to handle business logic which is common to all of the routes it handles. For example, it might be responsible for creating instances of models, loading data and then delegating the rendering to the relevant child activities. The child activities are responsible for rendering content appropriate for the current layout.
 
 ### The activity lifecycle
 
