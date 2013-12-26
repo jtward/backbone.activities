@@ -1,59 +1,69 @@
 backbone.activities
 ===================
 
-Backbone Activities is a [Backbone](https://github.com/documentcloud/backbone) plugin which makes it easier to create and organize responsive web apps. It borrows ideas, and its name, from Android's Activities, so some concepts may be familiar to Android developers.
+Backbone Activities is a [Backbone](https://github.com/documentcloud/backbone) plugin which provides high-level sctructure for web apps. It borrows ideas, and its name, from Android's Activities, so some concepts may be familiar to Android developers.
 
-Three additional Backbone entities are provided: `Backbone.Activity`, `Backbone.ActivityRouteHandler` and `Backbone.ActivityRouter`, which extends `Backbone.Router`.
+Two additional Backbone entities are provided: `Backbone.Activity` and `Backbone.ActivityRouter`, which extends `Backbone.Router`.
 
-Dependencies are [Backbone](https://github.com/documentcloud/backbone) and [Backbone.layoutmanager](https://github.com/tbranyen/backbone.layoutmanager).
+The dependencies are [Backbone](https://github.com/documentcloud/backbone) and underscore or lodash.
 
-Latest version: 0.7.1
+Latest version: 0.8.0
 
 
 ### Activities
-In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. An activity should encompass the behaviour and layouts for a single page on the largest form factor that you support. In the list/detail example, the list and detail pages would be handled by a single activity.
+An activity is a screen-level controller. You should create an activity for every distinct screen in your app, which means there will generally be a one-to-one relationship between your app's routes and these activities (unless, for example, the same screen is shown on more than one route). These activities have the responsibility of inserting views into the page and handling any data that might be used by multiple views on that screen or might need to be persisted ready for the next time the screen is shown.
 
-In Backbone, each page for your smallest form factor will have its own route, and so an activity may encompass several routes. In the list/detail example, your activity's routes might be `"!/list"` and `"!/detail/:id"`. The behaviour for these different routes are defined by separate handlers.
+For example, suppose you have a list and detail page - each of these pages would have an activity whose responsibility it is to present the relevant views on the page.
 
-The role of an activity is generally to handle all of the data involved across its handlers, and to delegate the rendering of a page to those handlers. The handler is responsible for rendering content appropriate for the current layout by using the `updateRegions` method.
+When you have screens that are related by the data that they use, as in the list / detail example, you could add a third activity as a parent of the list and detail activities to handle that data. The parent activity does not need to worry about inserting views into the page - that responsibility is delegated to the sub-activities, but it may need to handle some of the data used by its sub-activities.
+
+Adding the parent activity also makes the relationship between the list and detail views more explicit - because they are both sub-activities of the same parent activity, we know that they relate to the same data. It may be useful to create the parent activity even if there is no data shared between the sub-activities, to make the relationship between the activities explicit.
+
+In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. In this situation, you could have list and detail routes and activities, and a parent activity which handles the shared data. The router can notify the sub-activities when the screen layout changes, to which they can respond by re-rendering views. See the section on "responsive apps" for more details on how this works.
 
 ### The activity lifecycle
 ```
 ##################################################
 # Activity                                       #
 #      #################################         #
-#      # onCreate()                    #<===========|
-#      #  if this is the first time    #         #  |
-#      #  time the activity is used    #         #  |
-#      #################################         #  |
-#                     v                          #  |
-#      #################################         #  |
-#      # onStart()                     #<===========|
+#      # onCreate()                    #         #
+#      #  if this is the first time    #         #
+#      #  time the activity is used    #         #
+#      #################################         #
+#                     v                          #
+#      #################################         #
+#      # onStart(route_params)         #<-----------|
 #      #  if the last route was        #         #  |
 #      #  handled by another activity  #         #  |
 #      #################################         #  |
+#                     v                          #  |
+#      #################################         #  |
+#      # layouts[layout](route_params) #<-|      #  |
+#      #  if the route or layout       #  |      #  |
+#      #  changed                      #--|      #  |
+#      #################################         #  |
 #                     |                          #  |
 #  ##########################################    #  |
-#  # route handler    v                     #    #  |
+#  # subactivity      v                     #    #  |
 #  #   #################################    #    #  |
 #  #   # onCreate()                    #    #    #  |
-#  #   #  if the route changed         #    #  | #  |
-#  #   #################################    #  | #  |
-#  #                  v                     #  | #  |
+#  #   #  if the route changed         #    #    #  |
 #  #   #################################    #    #  |
-#  #   # onStart(route_params)         #<======| #  |
+#  #                  v                     #    #  |
+#  #   #################################    #    #  |
+#  #   # onStart(route_params)         #<------| #  |
 #  #   #  if the route changed         #    #  | #  |
 #  #   #################################    #  | #  |
 #  #                  v                     #  | #  |
 #  #   #################################    #  | #  |
-#  #   # layouts[layout](route_params) #<=| #  | #  |
+#  #   # layouts[layout](route_params) #<-| #  | #  |
 #  #   #  if the route or layout       #  | #  | #  |
-#  #   #  changed                      #==| #  | #  |
+#  #   #  changed                      #--| #  | #  |
 #  #   #################################    #  | #  |
 #  #                  v                     #  | #  |
 #  #   #################################    #  | #  |
 #  #   # onStop()                      #    #  | #  |
-#  #   #  if the route changed         #=======| #  |
+#  #   #  if the route changed         #-------| #  |
 #  #   #################################   #     #  |
 #  #                  |                    #     #  |
 #  #########################################     #  |
@@ -61,101 +71,80 @@ The role of an activity is generally to handle all of the data involved across i
 #      #################################         #  |
 #      # onStop()                      #         #  |
 #      #  if the next route is         #         #  |
-#      #  handled by another activity  #============|
+#      #  handled by another activity  #------------|
 #      #################################        #
 #                                               #
 #################################################
 
 ```
 
-### Hooking up routes to activities; route handlers
-An activity's `routes` object defines the routes for which an activity is responsible, and the handlers that implement the bahaviour for those routes. For example, the following `routes` object designates responsibility for the `"!/list"` route to a new instance of `MyListHandler`:
-
-```
-routes: {
-  "!/list": new MyListHandler()
-}
-```
-
-Alternatively, you can specify a string which is used to look up the handler in the activity's `handlers` object, so the following code has the same effect:
-
-```
-routes: {
-  "!/list": 'list'
-},
-handlers: {
-  "list": new MyListHandler()
-}
-```
-
-If you use the shorthand of attaching a handler directly to the `routes` object, then when the router is initialized, a reference to the handler is added to the activity's `handlers` object using the route as the key.
-
-A route handler may have `onStart` and `onStop` methods, as well as methods for the application's layouts. Here's an example of an activity with a `list` route handler:
-
-
-```
-var MyListHandler = Backbone.ActivityRouteHandler.extend({
-
-  layouts: {
-    
-    'single': function() {
-      // display the single-pane layout
-      
-      this.updateRegions({
-        "main": new MyListView()
-      });
-    
-    }
-  }
-
-});
-
-var myActivity = Backbone.Activity.extend({
-
-  "handlers": {
-    "list": new MyListHandler();
-  },
-
-  "routes": {
-    // list references handlers.list
-    "!/list": "list"
-  }
-
-});
-```
-
-If an `activityRoutes` property is defined on the router, then the activities' `routes` objects are overridden by the routes defined there. See `activityRoutes` in "Activity routers and layouts" for more info.
-
-### Regions, and rendering using `updateRegions`
-The `updateRegions` method takes an object of views to be inserted into regions. These regions are LayoutManager layouts whose `el`s are typically present throughout the application. It's possible you'll only need a main region, but you might want one for a header, footer, navigation menu, etc. Each handler has access to the app's regions via the `regions` property, which is populated by the activity router so you don't have to worry about them in your handlers. I've not yet had reason to access `regions` directly from a handler.
-
-There are a few ways to set the views for a given region using `updateRegions` (or `updateRegion` when updating a single region). The first, and easiest way, is to pass a view, which is inserted directly into the region. The second is to pass an object with a template name and views object. In this case, the region gets the given template rendered into it, and then views are rendered into place in the template using the selector strings. The third is to pass an array of views, but because of the way that LayoutManager works, you should only do this if all of the views in the array use the same template, or the views could render out of order.
-
-### Activity routers and layouts
+### Hooking up routes to activities
 Activity routers are an extension of `Backbone.Router` with some additional setup logic (to hook up routes to activities and handlers), and routing logic (implementing activity lifecycles).
 
-An activity router needs a few things at initialization time:
-- `regions`: an object of region names to LayoutManager layouts
-- `el`: a DOM element on which to set a class corresponding to the current layout. This lets you hook CSS into layouts
-- `activities`: a object of activity names to activities
-- `defaultRoute`: either a URL fragment or an object which defines the activity name and route handler name that should be used for the empty route
-- `activityRoutes`: an optional object of routes to `activity::handler` strings. If this is supplied, then routes defined in activities' `routes` object are overridden. The activity names are defined by the keys used in the router's `activities` object, and the handler names are defined by the keys used in the activity's `handlers` object. The activity and handler names are separated by a double colon (`::`).
+The activity router's `routes` object is similar to a standard Backbone router's, where the keys correspond to the URL fragments that the route matches. However, where a standard Backbone router's route values are functions or function names, an activity router's are activity path strings.
 
-The activity router also has a very important method, `setLayout`, which should be called immediately after the router has been instantiated (unless an `initialLayout` is specified) and also whenever the app's layout changes. `setLayout` takes a single string as its argument which is mapped to the names of the layout methods of activities' route handlers. You could hook up to a `matchMedia` listener to call `setLayout` in order to trigger the layout to change when the app resizes. If the `initialLayout` option is supplied, the router will automatically set the layout to the provided string when it is constructed.
+An activity path string is a path down an activity hierarchy, separated by double colons, `::`. The activities are written with the top-level activity first and the lowest-level activity last. There's no limit on the depth of the activity hierarchy.
+
+When a route is matched, the router splits the activity hierarchy string to get the list of names of activities. To get the actual activities from these names, the router first looks at its own `activities` object to find the top-level activity by the first name in the list. While there are more names in the list, the router looks for the next activity in the `activities` object of the last activity it found.
+
+When defining an `activities` object on the router or an activity, you can provide just the class of the sub-activity and the router will automatically instantiate it for you.
+
+```JavaScript
+var PeopleListActivity = Backbone.Activity.extend({
+  onStart: function() {
+    console.log("world");
+  },
+  layouts: {
+    'single': function() {
+      // display the single-pane layout
+    }
+  }
+});
+
+var PeopleActivity = Backbone.Activity.extend({
+  activities: {
+    "list": PeopleListActivity
+  },
+  onStart: function() {
+    console.log("hello ");
+  }
+});
+
+var MyRouter = Backbone.ActivityRouter.extend({
+  activities: {
+    "people": PeopleActivity
+  },
+  routes: {
+    // "people" references MyRouter.activities.people
+    // "list" references MyRouter.activities.people.activities.list
+    "!/people": "people::list"
+  }
+});
+```
+
+### Responsive apps
+The activity router's `setLayout` method provides a simple way of handling changes to your app's layout. `setLayout` takes a single string as its argument which refers to a unique name for the layout. You could hook up to a `matchMedia` listener to call `setLayout` in order to trigger the layout to change when the app resizes. If the `initialLayout` option is supplied, the router will automatically set the layout to the provided string when it is constructed.
+
+When an activity is started, the router will call the `layouts` function which corresponds router's current layout. This method is called immediately after `onStart`.
+Additionally, the router will also call the corresponding `layouts` function on all activities in the current hierarchy whenever the layout is changed via the `setLayout` method.
+
+### Redirection
+The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method (or an array of methods), which the router calls on each route. If a redirect method returns a route, the router will redirect to the returned route. The returned route may be in the form of a fragment (e.g. "!/people/john") or an activity hierarchy string (e.g. "people::list").
 
 ### Manual Routing
 If you need to programmatically trigger routes, you should use the `Backbone.history.navigate` method with the `trigger` option set to `true`.
 
-### Protected routes / authorization
-From version 0.4, Backbone Activities supports protecting handlers or entire activities behind authentication checks. 
-
-To protect a handler or activity, set the `isProtected` property on the handler or activity to `true`. To check the current state of authentication, the router's `authenticate` method is called. You must implement this method, and it should return a truthy value iff the user is authenticated and therefore able to access protected handlers and activities.
-
-When authentication fails, the router looks for the `authenticateRedirect` property on the handler, activity or router. This may be a URL fragment, an object containing an activity and handler name and an optional array of arguments, or a function which returns the fragment or object. This fragment or object is used to silently invoke a route where the user can provide authentication details.
-
-The ActivityRouter's `resolveAuthentication` method re-checks authentication and redirects the user to the protected page if they are authenticated. If authentication fails, then no action is taken.
-
 ## Change Log
+### 0.8.0
+- `ActivityRouteHandler` was removed; it's now activities all the way down. Activity hierarchies are now arbitrarily deep.
+- Removed dependency on `Backbone.LayoutManager` as well as `updateRegion` and `updateRegions`, and all references regions. View / region management is no longer a feature of `backbone.activities`.
+- `Activity.handlers` was renamed `Activity.activities` to reflect the fact that it now holds sub-activities.
+- `ActivityRouter`s are no longer associated with a DOM node, and CSS classes are no longer added to reflect the current activities or layout.
+- `isProtected`, `authenticate`, `authenticateRedirect` and `resolveAuthentication` have been replaced by the simpler `Activity.redirect`.
+- Removed `ActivityRouter.defaultRoute`.
+- `ActivityRouter.silentRoute` and `ActivityRouter.reload` methods were added.
+- Added AMD support.
+
 ### 0.7.1
 - Allow routers' el and regions to be provided via prototype and default el to document.body
 
