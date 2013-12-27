@@ -227,42 +227,23 @@
                 // if redirect property is a function, call it and return its return value
                 if (typeof entity.redirect === "function") {
                     redirect = entity.redirect.apply(entity, args);
-                }
-
-                // else if it's an array then iterate over each item
-                else if (_.isArray(entity.redirect)) {
-                    for (j = 0; j < entity.redirect.length; j++) {
-                        r = entity.redirect[j];
-                        redirect = r && r.apply(entity, args);
-                        if (redirect) {
-                            break;
-                        }
+                    if (redirect) {
+                        this._redirectRoute(redirect);
+                        return;
                     }
                 }
-
-                if (redirect) {
-                    break;
-                }
             }
-
-            // if a redirect was found, then redirect
-            if (redirect) {
-                this._redirectRoute(redirect);
-            }
-            else {
-                this._handleLifecycle(activities, args);
-            }
+            
+            this._handleLifecycle(activities, args);
         },
 
         _redirectRoute: function(redirect) {
-            if (redirect.trigger) {
-                // if trigger is true we know that the fragment is not an activity::subactivity string
-                this.navigate(redirect.fragment, redirect);
+            if (_.isObject(redirect) && redirect.trigger) {
+                Backbone.history.navigate(redirect.fragment, { replace: true, trigger: false });
             }
-            else {
-                redirect = this._getFragmentRoute(redirect);
-                this._handleRoute(redirect.activities, redirect.args);
-            }
+
+            redirect = redirect.fragment;
+            this._handleRoute(redirect.activities, redirect.args);
         },
 
         // handle the activity lifecycle
@@ -368,7 +349,7 @@
         // keys with special meaning *(routes, activities, redirect, layouts)*
         // are attached directly to the activity.
         _configure: function(options) {
-            _.extend(this, _.pick(options, "routes", "activities", "redirect", "layouts"));
+            _.extend(this, _.pick(options, "activities", "redirect", "layouts"));
         },
 
         // initialization stub.
@@ -398,7 +379,6 @@
             }
         },
 
-        // calls an Activity's onStop method and processes the task queue
         stop: function () {
             this.onStop.apply(this, this.router._currentArgs);
         },

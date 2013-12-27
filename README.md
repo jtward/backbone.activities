@@ -7,7 +7,7 @@ Two additional Backbone entities are provided: `Backbone.Activity` and `Backbone
 
 The dependencies are [Backbone](https://github.com/documentcloud/backbone) and underscore or lodash.
 
-Latest version: 0.8.0
+Latest version: 0.8.1
 
 
 ### Activities
@@ -129,12 +129,16 @@ When an activity is started, the router will call the `layouts` function which c
 Additionally, the router will also call the corresponding `layouts` function on all activities in the current hierarchy whenever the layout is changed via the `setLayout` method.
 
 ### Redirection
-The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method (or an array of methods), which the router calls on each route. If a redirect method returns a route, the router will redirect to the returned route. The returned route may be in the form of a fragment (e.g. "!/people/john") or an activity hierarchy string (e.g. "people::list").
+The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method, which the router calls on before it routes. If a redirect method returns a route, the router will redirect to the returned route. The returned route may be in the form of a fragment (e.g. `"!/people/john"`), or activity hierarchy string (e.g. `"people::list"`). By default, the hash does not change when redirecting. To change the hash, return an object from the redirect function which contains the new fragment and set the `trigger` property to `true`; e.g. `{ "fragment": "!/people/john", "trigger": true }`.
 
 ### Manual Routing
 If you need to programmatically trigger routes, you should use the `Backbone.history.navigate` method with the `trigger` option set to `true`.
 
 ## Change Log
+### 0.8.1
+- Removed the option to pass an array of redirect functions
+- Added the option to change the hash from a redirect
+
 ### 0.8.0
 - `ActivityRouteHandler` was removed; it's now activities all the way down. Activity hierarchies are now arbitrarily deep.
 - Removed dependency on `Backbone.LayoutManager` as well as `updateRegion` and `updateRegions`, and all references regions. View / region management is no longer a feature of `backbone.activities`.
