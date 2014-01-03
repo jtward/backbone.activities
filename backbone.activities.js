@@ -20,22 +20,25 @@
 
     var VERSION = '0.8.2';
 
+    var Configure = function() {
+        var properties = Array.prototype.slice.apply(arguments);
+        return {
+            _configure: function(options) {
+                if (_.isObject(options)) {
+                    properties.unshift(options);
+                    _.extend(this, _.pick.apply(_, properties));
+                }
+            }
+        };
+    };
+
     Backbone.ActivityRouter = Backbone.Router.extend({
 
+        _configure: Configure("activities", "routes", "redirect", "initialLayout")._configure,
+
         constructor: function(options) {
-            options = options || {};
 
-            this.activities = this.activities || options.activities;
-
-            // routes is an optional map from url fragments to either functions on the router (like ordinary Backbone routers)
-            // or activity::subactivity strings
-            this.routes = options.routes || this.routes;
-
-            this.redirect = this.redirect || options.redirect;
-
-            // initialLayout is a string. If defined, the layout is set later in the constructor
-            // it may be specified in the class or overridden when instantiated
-            this._initialLayout = options.initialLayout || this.initialLayout;
+            this._configure(options);
 
             // stores a reference to each activity by name
             this._activities = {};
@@ -53,8 +56,8 @@
             // initialize initial layout.
             // if the router is responsive, setLayout should be called whenever the desired
             // layout changes.
-            if (this._initialLayout) {
-                this.setLayout(this._initialLayout);
+            if (this.initialLayout) {
+                this.setLayout(this.initialLayout);
             }
 
             // Call router's initialize functions
@@ -357,19 +360,12 @@
 
     // activity constructor
     Backbone.Activity = function(options) {
-        this._configure(options || {});
+        this._configure(options);
         this.initialize.apply(this, arguments);
     };
 
     // mix events into the prototype
-    _.extend(Backbone.Activity.prototype, Backbone.Events, {
-
-        // performs the initial configuration of an Activity with a set of options.
-        // keys with special meaning *(routes, activities, redirect, layouts)*
-        // are attached directly to the activity.
-        _configure: function(options) {
-            _.extend(this, _.pick(options, "activities", "redirect", "layouts"));
-        },
+    _.extend(Backbone.Activity.prototype, Backbone.Events, Configure("activities", "redirect", "layouts"), {
 
         // initialization stub.
         initialize: function() {},
