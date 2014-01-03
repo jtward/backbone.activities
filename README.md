@@ -19,9 +19,12 @@ When you have screens that are related by the data that they use, as in the list
 
 Adding the parent activity also makes the relationship between the list and detail views more explicit - because they are both sub-activities of the same parent activity, we know that they relate to the same data. It may be useful to create the parent activity even if there is no data shared between the sub-activities, to make the relationship between the activities explicit.
 
-In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single list/detail page for larger ones. In this situation, you could have list and detail routes and activities, and a parent activity which handles the shared data. The router can notify the sub-activities when the screen layout changes, to which they can respond by re-rendering views. See the section on "responsive apps" for more details on how this works.
+In a responsive app, you may have multiple pages for devices with smaller form factors that become a single page on a device with a larger form factor. For example, you might have separate list and detail pages for small devices but a single combined list/detail page for larger ones. In this situation, you could have list and detail routes and activities, and a parent activity which handles the shared data. The router can notify the sub-activities when the screen layout changes, to which they can respond by re-rendering views. See the section on "responsive apps" for more details on how this works.
 
 ### The activity lifecycle
+
+The following diagram shows the methods on the activities in the order that they are called for a 2-deep activitiy hierarchy.
+
 ```
 ##################################################
 # Activity                                       #
@@ -63,10 +66,11 @@ In a responsive app, you may have multiple pages for devices with smaller form f
 #  #                  v                     #  | #  |
 #  #   #################################    #  | #  |
 #  #   # onStop()                      #    #  | #  |
-#  #   #  if the route changed         #-------| #  |
-#  #   #################################   #     #  |
-#  #                  |                    #     #  |
-#  #########################################     #  |
+#  #   #  if the next route is         #    #  | #  |
+#  #   #  handled by another activity  #-------| #  |
+#  #   #################################    #    #  |
+#  #                  |                     #    #  |
+#  ##########################################    #  |
 #                     v                          #  |
 #      #################################         #  |
 #      # onStop()                      #         #  |
@@ -81,9 +85,9 @@ In a responsive app, you may have multiple pages for devices with smaller form f
 ### Hooking up routes to activities
 Activity routers are an extension of `Backbone.Router` with some additional setup logic (to hook up routes to activities and handlers), and routing logic (implementing activity lifecycles).
 
-The activity router's `routes` object is similar to a standard Backbone router's, where the keys correspond to the URL fragments that the route matches. However, where a standard Backbone router's route values are functions or function names, an activity router's are activity path strings.
+The activity router's `routes` object is similar to a standard Backbone router's, where the keys correspond to the URL fragments that the route matches. However, where a standard Backbone router's route values are functions or function names, an activity router's are activity hierarchy strings.
 
-An activity path string is a path down an activity hierarchy, separated by double colons, `::`. The activities are written with the top-level activity first and the lowest-level activity last. There's no limit on the depth of the activity hierarchy.
+An activity hierarchy string is a path down an activity hierarchy, separated by double colons, `::`. The activities are written with the top-level activity first and the lowest-level activity last. There's no limit on the depth of the activity hierarchy.
 
 When a route is matched, the router splits the activity hierarchy string to get the list of names of activities. To get the actual activities from these names, the router first looks at its own `activities` object to find the top-level activity by the first name in the list. While there are more names in the list, the router looks for the next activity in the `activities` object of the last activity it found.
 
@@ -129,15 +133,15 @@ When an activity is started, the router will call the `layouts` function which c
 Additionally, the router will also call the corresponding `layouts` function on all activities in the current hierarchy whenever the layout is changed via the `setLayout` method.
 
 ### Redirection
-The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method, which the router calls on before it routes. If a redirect method returns a route, the router will redirect to the returned route. The returned route may be in the form of a fragment (e.g. `"!/people/john"`), or activity hierarchy string (e.g. `"people::list"`). By default, the hash will change when redirecting if given a fragment. To stop the hash changing, return an object from the redirect function which contains the fragment to redirect to and set the `updateHash` property to `false`; e.g. `{ "redirect": "!/people/john", "updateHash": false }`. When redirecting using an activity hierarchy string, you can pass arguments by returning an object from the redirect function which contains the hierarchy to redirect to and set the `args` property to an array of arguments; e.g. `{ "redirect": "people::detail", "args": [ "john" ]}`.
+The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method, which the router calls on before it routes. If a redirect method returns a route, the router will redirect. The returned route may be in the form of a fragment (e.g. `"!/people/john"`), or activity hierarchy string (e.g. `"people::list"`). By default, the hash will silently change when redirecting if given a fragment. To stop the hash changing, return an object from the redirect function which contains the fragment to redirect to and set the `updateHash` property to `false`; e.g. `{ "redirect": "!/people/john", "updateHash": false }`. When redirecting using an activity hierarchy string, you can pass arguments by returning an object from the redirect function which contains the hierarchy to redirect to and set the `args` property to an array of arguments; e.g. `{ "redirect": "people::detail", "args": [ "john" ]}`.
 
 ### Manual Routing
 If you need to programmatically trigger routes, you should use the `Backbone.history.navigate` method with the `trigger` option set to `true`.
 
 ## Change Log
 ### 0.8.2
-- When redirecting with a fragment the hash will update by default, but this can be overridden.
-- When redirecting with an activity hierarchy string you can now pass arguments to be used by the target activities.
+- When redirecting with a fragment the hash will now update by default, but this can be overridden.
+- When redirecting with an activity hierarchy string you can now pass arguments to the target activities.
 
 ### 0.8.1
 - Removed the option to pass an array of redirect functions
@@ -145,7 +149,7 @@ If you need to programmatically trigger routes, you should use the `Backbone.his
 
 ### 0.8.0
 - `ActivityRouteHandler` was removed; it's now activities all the way down. Activity hierarchies are now arbitrarily deep.
-- Removed dependency on `Backbone.LayoutManager` as well as `updateRegion` and `updateRegions`, and all references regions. View / region management is no longer a feature of `backbone.activities`.
+- Removed dependency on `Backbone.LayoutManager` as well as `updateRegion` and `updateRegions`, and all references to regions. View / region management is no longer a feature of `backbone.activities`.
 - `Activity.handlers` was renamed `Activity.activities` to reflect the fact that it now holds sub-activities.
 - `ActivityRouter`s are no longer associated with a DOM node, and CSS classes are no longer added to reflect the current activities or layout.
 - `isProtected`, `authenticate`, `authenticateRedirect` and `resolveAuthentication` have been replaced by the simpler `Activity.redirect`.
