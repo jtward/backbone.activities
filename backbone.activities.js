@@ -18,7 +18,7 @@
 })(typeof global === "object" ? global : this, function (root, Backbone, _, $) {
     "use strict";
 
-    var VERSION = '0.8.0';
+    var VERSION = '0.8.2';
 
     Backbone.ActivityRouter = Backbone.Router.extend({
 
@@ -60,19 +60,19 @@
         // wraps Backbone.Router.Route to add support for activity::subactivity strings
         // and binding arguments to routes.
         route: function (route, handlerString, callback) {
-            var nativeRoute = Backbone.Router.prototype.route;
+            var _route = Backbone.Router.prototype.route;
 
             // if a callback is passed then the route is a custom route; defer to
             // Backbone.Router.route
             if (callback) {
-                return nativeRoute.apply(this, arguments);
+                return _route.apply(this, arguments);
             }
 
             // if no callback was passed but 'handlerString' matches a function on the router
             // then route is an ordinary Backbone route; call Backbone.Router.route
             // with the handlerString as the name
             if (this[handlerString] && typeof this[handlerString] === "function") {
-                return nativeRoute.call(this, route, handlerString);
+                return _route.call(this, route, handlerString);
             }
 
             // else route is an activityroute: first we process the
@@ -91,7 +91,7 @@
             // call Backbone.Router.route with a custom callback function
             // using the complete handlerString as name for uniqueness
             var router = this;
-            return nativeRoute.call(this, route, handlerString, function() {
+            return _route.call(this, route, handlerString, function() {
                 router._handleRoute(activities, Array.prototype.slice.apply(arguments));
             });
         },
@@ -117,7 +117,7 @@
 
                 // if there's no cached activity, create one
                 if (!activity) {
-                    activity = (subactivities && subactivities[ localName ]);
+                    activity = (subactivities && subactivities[localName]);
 
                     if (activity) {
                         parent = (activities.length > 0) ? activities[activities.length - 1] : undefined;
@@ -228,8 +228,15 @@
                 if (typeof entity.redirect === "function") {
                     redirect = entity.redirect.apply(entity, args);
                     if (redirect) {
-                        this._redirectRoute(redirect);
-                        return;
+                        // redirect can return a string or an object
+                        if (typeof redirect === "string") {
+                            this._redirectRoute(redirect);
+                            return;
+                        }
+                        else if (typeof redirect === "object" && typeof redirect.redirect === "string") {
+                            this._redirectRoute(redirect.redirect, redirect);
+                            return;
+                        }
                     }
                 }
             }
@@ -237,12 +244,20 @@
             this._handleLifecycle(activities, args);
         },
 
-        _redirectRoute: function(redirect) {
-            if (_.isObject(redirect) && redirect.trigger) {
-                Backbone.history.navigate(redirect.fragment, { replace: true, trigger: false });
+        _redirectRoute: function(fragment, options) {
+            var redirect = this._getFragmentRoute(fragment);
+
+            // if given a real fragment, update the hash unless explicitly told not to via
+            // the options object
+            if (redirect.route && (!_.isObject(options) || options.updateHash !== false)) {
+                Backbone.history.navigate(fragment, { replace: true, trigger: false });
             }
 
-            redirect = redirect.fragment;
+            // if given an activity hierarchy string, args may be provided in the options object
+            else if (!redirect.route && _.isObject(options) && _.isArray(options.args)) {
+                redirect.args = options.args;
+            }
+
             this._handleRoute(redirect.activities, redirect.args);
         },
 

@@ -7,7 +7,7 @@ Two additional Backbone entities are provided: `Backbone.Activity` and `Backbone
 
 The dependencies are [Backbone](https://github.com/documentcloud/backbone) and underscore or lodash.
 
-Latest version: 0.8.1
+Latest version: 0.8.2
 
 
 ### Activities
@@ -129,12 +129,16 @@ When an activity is started, the router will call the `layouts` function which c
 Additionally, the router will also call the corresponding `layouts` function on all activities in the current hierarchy whenever the layout is changed via the `setLayout` method.
 
 ### Redirection
-The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method, which the router calls on before it routes. If a redirect method returns a route, the router will redirect to the returned route. The returned route may be in the form of a fragment (e.g. `"!/people/john"`), or activity hierarchy string (e.g. `"people::list"`). By default, the hash does not change when redirecting. To change the hash, return an object from the redirect function which contains the new fragment and set the `trigger` property to `true`; e.g. `{ "fragment": "!/people/john", "trigger": true }`.
+The activity router includes a simple method for redirecting between routes. The router and activities may define a `redirect` method, which the router calls on before it routes. If a redirect method returns a route, the router will redirect to the returned route. The returned route may be in the form of a fragment (e.g. `"!/people/john"`), or activity hierarchy string (e.g. `"people::list"`). By default, the hash will change when redirecting if given a fragment. To stop the hash changing, return an object from the redirect function which contains the fragment to redirect to and set the `updateHash` property to `false`; e.g. `{ "redirect": "!/people/john", "updateHash": true }`. When redirecting using an activity hierarchy string, you can pass arguments by returning an object from the redirect function which contains the hierarchy to redirect to and set the `args` property to an array of arguments; e.g. `{ "redirect": "people::detail", "args": [ "john" ]}`.
 
 ### Manual Routing
 If you need to programmatically trigger routes, you should use the `Backbone.history.navigate` method with the `trigger` option set to `true`.
 
 ## Change Log
+### 0.8.2
+- When redirecting with a fragment the hash will update by default, but this can be overridden.
+- When redirecting with an activity hierarchy string you can now pass arguments to be used by the target activities.
+
 ### 0.8.1
 - Removed the option to pass an array of redirect functions
 - Added the option to change the hash from a redirect
