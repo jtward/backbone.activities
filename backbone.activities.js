@@ -25,9 +25,13 @@
         constructor: function(options) {
             options = options || {};
 
+            this.activities = this.activities || options.activities;
+
             // routes is an optional map from url fragments to either functions on the router (like ordinary Backbone routers)
             // or activity::subactivity strings
-            this.routes = this.activityRoutes = options.routes || this.routes;
+            this.routes = options.routes || this.routes;
+
+            this.redirect = this.redirect || options.redirect;
 
             // initialLayout is a string. If defined, the layout is set later in the constructor
             // it may be specified in the class or overridden when instantiated
